@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from 'vue';
 import type { Project, WorkItem, WorkStatus } from '../../types/projects';
+import { workItemMeta, workItemTitle } from '../../utils/workItems';
 
 const MIN_WIDTH = 224;
 const MAX_WIDTH = 420;
@@ -58,34 +59,6 @@ const sections = computed<WorkSection[]>(() => {
     items: items.filter((item) => item.status === status),
   }));
 });
-
-function workItemTitle(item: WorkItem) {
-  if (item.branch) return item.branch;
-  if (item.worktreePath) {
-    const segments = item.worktreePath.split(/[\\/]/).filter(Boolean);
-    return segments[segments.length - 1] ?? 'Detached worktree';
-  }
-  return `Detached at ${item.headSha.slice(0, 7)}`;
-}
-
-function workItemMeta(item: WorkItem) {
-  if (item.status === 'working') {
-    if (item.additions > 0 || item.deletions > 0) {
-      return `+${item.additions} −${item.deletions}`;
-    }
-    return `${item.changedFiles} file${item.changedFiles === 1 ? '' : 's'}`;
-  }
-
-  return relativeTime(item.updatedAt);
-}
-
-function relativeTime(timestamp: number) {
-  const seconds = Math.max(0, Math.floor(Date.now() / 1000) - timestamp);
-  if (seconds < 60) return 'now';
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`;
-  return `${Math.floor(seconds / 86400)}d`;
-}
 
 function clampWidth(width: number) {
   return Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, width));
@@ -259,7 +232,6 @@ onBeforeUnmount(stopResize);
   background: transparent;
   border: 0;
   border-radius: 6px;
-  cursor: default;
 }
 
 .work-section__label {
@@ -326,7 +298,6 @@ onBeforeUnmount(stopResize);
   background: transparent;
   border: 0;
   border-radius: 6px;
-  cursor: default;
 }
 
 .work-item:hover {

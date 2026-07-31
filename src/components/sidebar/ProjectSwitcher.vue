@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { Plus, Settings, X } from '@lucide/vue';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import AppButton from '../ui/AppButton.vue';
 import type { Project } from '../../types/projects';
 
 const props = defineProps<{
@@ -11,6 +13,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   add: [];
   remove: [id: string];
+  settings: [id: string];
 }>();
 
 const root = ref<HTMLElement>();
@@ -25,6 +28,11 @@ function closeMenuOnOutsideClick(event: PointerEvent) {
 
 function closeMenuOnEscape(event: KeyboardEvent) {
   if (event.key === 'Escape') open.value = false;
+}
+
+function openSettings(projectId: string) {
+  open.value = false;
+  emit('settings', projectId);
 }
 
 onMounted(() => {
@@ -68,31 +76,43 @@ onBeforeUnmount(() => {
               <span>{{ project.name }}</span>
             </div>
 
-            <button
+            <AppButton
+              class="project-menu__settings"
+              variant="ghost"
+              size="icon"
+              type="button"
+              :aria-label="`Settings for ${project.name}`"
+              :title="`Settings for ${project.name}`"
+              @click="openSettings(project.id)"
+            >
+              <Settings aria-hidden="true" />
+            </AppButton>
+
+            <AppButton
               class="project-menu__close"
+              variant="ghost"
+              size="icon"
               type="button"
               :aria-label="`Close ${project.name}`"
               :title="`Close ${project.name}`"
               @click="emit('remove', project.id)"
             >
-              <svg viewBox="0 0 16 16" aria-hidden="true">
-                <path d="m4 4 8 8m0-8-8 8" />
-              </svg>
-            </button>
+              <X aria-hidden="true" />
+            </AppButton>
           </div>
         </div>
 
-        <button
+        <AppButton
           class="project-menu__add"
+          variant="ghost"
+          block
           type="button"
           :disabled="loading"
           @click="emit('add')"
         >
-          <svg viewBox="0 0 16 16" aria-hidden="true">
-            <path d="M8 2.75v10.5M2.75 8h10.5" />
-          </svg>
+          <Plus aria-hidden="true" />
           <span>{{ loading ? 'Scanning…' : 'Add project' }}</span>
-        </button>
+        </AppButton>
       </div>
     </Transition>
   </div>
@@ -115,7 +135,6 @@ onBeforeUnmount(() => {
   background: transparent;
   border: 0;
   border-radius: 7px;
-  cursor: default;
 }
 
 .project-switcher__trigger:hover,
@@ -200,32 +219,23 @@ onBeforeUnmount(() => {
   box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.24);
 }
 
-.project-menu__close {
-  display: grid;
+.project-menu__close,
+.project-menu__settings {
   flex: 0 0 auto;
   width: 30px;
   height: 30px;
-  padding: 0;
-  place-items: center;
-  color: var(--text-secondary);
-  background: transparent;
-  border: 0;
-  border-radius: 5px;
-  cursor: default;
 }
 
-.project-menu__close:hover {
-  color: var(--text-primary);
+.project-menu__close:hover,
+.project-menu__settings:hover {
   background: rgba(255, 255, 255, 0.07);
 }
 
 .project-menu__close svg,
+.project-menu__settings svg,
 .project-menu__add svg {
   width: 15px;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-width: 1.35;
+  height: 15px;
 }
 
 .project-menu__add {
@@ -241,7 +251,6 @@ onBeforeUnmount(() => {
   background: rgba(255, 255, 255, 0.02);
   border: 0;
   border-top: 1px solid var(--border-subtle);
-  cursor: default;
 }
 
 .project-menu__add:hover {

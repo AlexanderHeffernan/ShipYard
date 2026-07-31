@@ -21,6 +21,11 @@ pub(super) fn path_string(path: &Path) -> String {
     path.to_string_lossy().into_owned()
 }
 
+pub(crate) fn belongs_to_project(project_id: &str, worktree_path: &str) -> Result<bool, String> {
+    let (_, common_dir) = resolve(worktree_path)?;
+    Ok(path_string(&common_dir) == project_id)
+}
+
 fn canonical_path(path: &Path) -> Result<PathBuf, String> {
     path.canonicalize()
         .map_err(|error| format!("could not resolve {}: {error}", path.display()))

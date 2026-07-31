@@ -1,13 +1,24 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
+import WorkItemPanel from './components/review/WorkItemPanel.vue';
+import ProjectSettingsModal from './components/settings/ProjectSettingsModal.vue';
 import AppSidebar from './components/sidebar/AppSidebar.vue';
 import ProjectSwitcher from './components/sidebar/ProjectSwitcher.vue';
 import { useProjects } from './composables/useProjects';
+import type { Project } from './types/projects';
 
 const sidebarOpen = ref(true);
 const sidebarWidth = ref(288);
 const selectedWorkItemId = ref<string | null>(null);
+const settingsProject = ref<Project | null>(null);
 const { projects, loading, error, loadProjects, addProject, removeProject } = useProjects();
+const selection = computed(() => {
+  for (const project of projects.value) {
+    const workItem = project.workItems.find((item) => item.id === selectedWorkItemId.value);
+    if (workItem) return { project, workItem };
+  }
+  return null;
+});
 
 onMounted(loadProjects);
 </script>
@@ -31,11 +42,13 @@ onMounted(loadProjects);
       </button>
 
       <ProjectSwitcher
+        v-if="sidebarOpen"
         :projects="projects"
         :loading="loading"
         :error="error"
         @add="addProject"
         @remove="removeProject"
+        @settings="settingsProject = projects.find((project) => project.id === $event) ?? null"
       />
     </div>
 
@@ -47,7 +60,20 @@ onMounted(loadProjects);
       @select="selectedWorkItemId = $event"
     />
 
-    <main class="app-content"></main>
+    <main class="app-content">
+      <WorkItemPanel
+        :project="selection?.project ?? null"
+        :work-item="selection?.workItem ?? null"
+        :sidebar-open="sidebarOpen"
+        @settings="settingsProject = $event"
+      />
+    </main>
+
+    <ProjectSettingsModal
+      v-if="settingsProject"
+      :project="settingsProject"
+      @close="settingsProject = null"
+    />
   </div>
 </template>
 
@@ -95,7 +121,6 @@ onMounted(loadProjects);
   background: transparent;
   border: 0;
   border-radius: 7px;
-  cursor: default;
 }
 
 .sidebar-toggle:hover {

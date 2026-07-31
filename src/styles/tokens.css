@@ -36,7 +36,16 @@ body {
   background: transparent;
 }
 
+button:not(:disabled) {
+  cursor: pointer;
+}
+
 body.is-resizing-sidebar,
 body.is-resizing-sidebar * {
   cursor: col-resize !important;
+}
+
+body.is-resizing-terminal,
+body.is-resizing-terminal * {
+  cursor: row-resize !important;
 }
