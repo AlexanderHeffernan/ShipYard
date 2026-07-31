@@ -10,11 +10,19 @@
     "frontendDist": "../dist"
   },
   "app": {
+    "macOSPrivateApi": true,
     "windows": [
       {
         "title": "shipyard",
         "width": 800,
-        "height": 600
+        "height": 600,
+        "hiddenTitle": true,
+        "titleBarStyle": "Overlay",
+        "transparent": true,
+        "windowEffects": {
+          "effects": ["sidebar"],
+          "state": "active"
+        }
       }
     ],
     "security": {
