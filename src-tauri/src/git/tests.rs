@@ -1,4 +1,4 @@
-use super::{scan_project, work_status::WorkStatus};
+use super::{scan_project, work_status::WorkStatus, worktree_paths};
 use std::{fs, path::Path, path::PathBuf, process::Command, time::SystemTime};
 
 #[test]
@@ -67,6 +67,7 @@ fn associates_a_dirty_linked_worktree_with_its_branch() {
     );
     fs::write(linked.join("worktree.txt"), "in progress\n").unwrap();
     let canonical = linked.canonicalize().unwrap();
+    assert!(worktree_paths(&root).unwrap().contains(&canonical));
     let project = scan_project(root.to_str().unwrap()).unwrap();
     let item = project
         .work_items
@@ -80,6 +81,7 @@ fn associates_a_dirty_linked_worktree_with_its_branch() {
         &root,
         &["worktree", "remove", "--force", linked.to_str().unwrap()],
     );
+    assert!(!worktree_paths(&root).unwrap().contains(&canonical));
     fs::remove_dir_all(root).unwrap();
 }
 

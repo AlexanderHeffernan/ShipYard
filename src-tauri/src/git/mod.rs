@@ -14,8 +14,9 @@ mod worktree;
 mod worktree_reader;
 
 pub use project::Project;
-pub(crate) use repository::belongs_to_project;
+pub(crate) use repository::{belongs_to_project, resolve};
 pub use scanner::scan_project;
+pub(crate) use worktree_reader::paths as worktree_paths;
 
 #[cfg(test)]
 mod tests;

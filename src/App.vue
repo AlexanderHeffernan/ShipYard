@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import WorkItemPanel from './components/review/WorkItemPanel.vue';
 import ProjectSettingsModal from './components/settings/ProjectSettingsModal.vue';
 import AppSidebar from './components/sidebar/AppSidebar.vue';
@@ -11,7 +11,8 @@ const sidebarOpen = ref(true);
 const sidebarWidth = ref(288);
 const selectedWorkItemId = ref<string | null>(null);
 const settingsProject = ref<Project | null>(null);
-const { projects, loading, error, loadProjects, addProject, removeProject } = useProjects();
+const { projects, loading, error, loadProjects, addProject, removeProject, disposeProjects } =
+  useProjects();
 const selection = computed(() => {
   for (const project of projects.value) {
     const workItem = project.workItems.find((item) => item.id === selectedWorkItemId.value);
@@ -21,6 +22,10 @@ const selection = computed(() => {
 });
 
 onMounted(loadProjects);
+onBeforeUnmount(disposeProjects);
+watch(selection, (current) => {
+  if (selectedWorkItemId.value && !current) selectedWorkItemId.value = null;
+});
 </script>
 
 <template>

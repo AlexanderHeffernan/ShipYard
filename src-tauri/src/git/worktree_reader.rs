@@ -18,6 +18,14 @@ pub(super) fn read(root: &Path) -> Result<Vec<Worktree>, String> {
     Ok(worktrees)
 }
 
+pub(crate) fn paths(root: &Path) -> Result<Vec<PathBuf>, String> {
+    Ok(read(root)?
+        .into_iter()
+        .filter(|worktree| !worktree.bare)
+        .map(|worktree| worktree.path)
+        .collect())
+}
+
 fn parse_field(field: &str, worktrees: &mut Vec<Worktree>, current: &mut Option<Worktree>) {
     if let Some(path) = field.strip_prefix("worktree ") {
         push_current(worktrees, current);

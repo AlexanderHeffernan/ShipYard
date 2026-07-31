@@ -1,5 +1,6 @@
 mod git;
 mod run;
+mod watch;
 
 use tauri::Manager;
 
@@ -8,6 +9,23 @@ async fn scan_project(path: String) -> Result<git::Project, String> {
     tauri::async_runtime::spawn_blocking(move || git::scan_project(&path))
         .await
         .map_err(|error| format!("project scan failed: {error}"))?
+}
+
+#[tauri::command]
+fn start_project_watch(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, watch::WatchManager>,
+    path: String,
+) -> Result<(), String> {
+    state.start(app, &path)
+}
+
+#[tauri::command]
+fn stop_project_watch(
+    state: tauri::State<'_, watch::WatchManager>,
+    project_id: String,
+) -> Result<(), String> {
+    state.stop(&project_id)
 }
 
 #[tauri::command]
@@ -86,10 +104,13 @@ fn resize_run_terminal(
 pub fn run() {
     let app = tauri::Builder::default()
         .manage(run::RunManager::default())
+        .manage(watch::WatchManager::default())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             scan_project,
+            start_project_watch,
+            stop_project_watch,
             get_run_settings,
             save_run_script,
             delete_run_script,
@@ -103,6 +124,7 @@ pub fn run() {
     app.run(|handle, event| {
         if matches!(event, tauri::RunEvent::ExitRequested { .. }) {
             handle.state::<run::RunManager>().terminate_all();
+            handle.state::<watch::WatchManager>().stop_all();
         }
     });
 }

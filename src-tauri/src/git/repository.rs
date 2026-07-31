@@ -1,7 +1,7 @@
 use super::command;
 use std::path::{Path, PathBuf};
 
-pub(super) fn resolve(selected_path: &str) -> Result<(PathBuf, PathBuf), String> {
+pub(crate) fn resolve(selected_path: &str) -> Result<(PathBuf, PathBuf), String> {
     let selected_path = Path::new(selected_path);
     let root = canonical_path(Path::new(
         command::text(selected_path, &["rev-parse", "--show-toplevel"])?.trim(),
