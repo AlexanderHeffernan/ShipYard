@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import AppSidebar from './components/sidebar/AppSidebar.vue';
+import ProjectSwitcher from './components/sidebar/ProjectSwitcher.vue';
 
 const sidebarOpen = ref(true);
 const sidebarWidth = ref(288);
@@ -10,18 +11,22 @@ const sidebarWidth = ref(288);
   <div class="app-shell">
     <header class="window-drag-region" data-tauri-drag-region></header>
 
-    <button
-      class="sidebar-toggle"
-      type="button"
-      :aria-label="sidebarOpen ? 'Hide sidebar' : 'Show sidebar'"
-      :title="sidebarOpen ? 'Hide sidebar' : 'Show sidebar'"
-      @click="sidebarOpen = !sidebarOpen"
-    >
-      <svg viewBox="0 0 20 20" aria-hidden="true">
-        <rect x="2.75" y="3.25" width="14.5" height="13.5" rx="2.25" />
-        <path d="M7.25 3.75v12.5" />
-      </svg>
-    </button>
+    <div class="titlebar-controls">
+      <button
+        class="sidebar-toggle"
+        type="button"
+        :aria-label="sidebarOpen ? 'Hide sidebar' : 'Show sidebar'"
+        :title="sidebarOpen ? 'Hide sidebar' : 'Show sidebar'"
+        @click="sidebarOpen = !sidebarOpen"
+      >
+        <svg viewBox="0 0 20 20" aria-hidden="true">
+          <rect x="2.75" y="3.25" width="14.5" height="13.5" rx="2.25" />
+          <path d="M7.25 3.75v12.5" />
+        </svg>
+      </button>
+
+      <ProjectSwitcher />
+    </div>
 
     <AppSidebar
       :open="sidebarOpen"
@@ -56,11 +61,17 @@ const sidebarWidth = ref(288);
   height: 36px;
 }
 
-.sidebar-toggle {
+.titlebar-controls {
   position: fixed;
   z-index: 4;
   top: 4px;
-  left: 90px;
+  left: 82px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sidebar-toggle {
   display: grid;
   width: 24px;
   height: 24px;

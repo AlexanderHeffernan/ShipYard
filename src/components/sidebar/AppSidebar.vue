@@ -1,8 +1,53 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref } from 'vue';
 
-const MIN_WIDTH = 220;
+const MIN_WIDTH = 224;
 const MAX_WIDTH = 420;
+
+type WorkItem = {
+  id: number;
+  title: string;
+  meta: string;
+  color: string;
+};
+
+type WorkSection = {
+  id: 'working' | 'ready' | 'shipped';
+  label: string;
+  items: WorkItem[];
+};
+
+const sections: WorkSection[] = [
+  {
+    id: 'working',
+    label: 'Working',
+    items: [
+      { id: 1, title: 'Refactor auth flow', meta: '+34 −8', color: '#ffbd2e' },
+      { id: 2, title: 'Fix mobile layout', meta: '+12 −3', color: '#ff4f8b' },
+      { id: 3, title: 'Upgrade dependencies', meta: '+6 −14', color: '#9699a1' },
+    ],
+  },
+  {
+    id: 'ready',
+    label: 'Ready',
+    items: [
+      { id: 4, title: 'Add CSV export', meta: '12m', color: '#8b5cf6' },
+      { id: 5, title: 'Improve onboarding', meta: '1h', color: '#3395ff' },
+      { id: 6, title: 'Update pricing page', meta: '3h', color: '#29c76f' },
+    ],
+  },
+  {
+    id: 'shipped',
+    label: 'Shipped',
+    items: [
+      { id: 7, title: 'Configure CI', meta: '2h', color: '#8b5cf6' },
+      { id: 8, title: 'Add dark mode', meta: '1d', color: '#3395ff' },
+      { id: 9, title: 'Docs: getting started', meta: '3d', color: '#29c76f' },
+    ],
+  },
+];
+
+const collapsedSections = ref(new Set<WorkSection['id']>());
 
 const props = defineProps<{
   open: boolean;
@@ -36,6 +81,7 @@ function onPointerMove(event: PointerEvent) {
 }
 
 function startResize(event: PointerEvent) {
+  if (event.button !== 0) return;
   event.preventDefault();
   isResizing.value = true;
   document.body.classList.add('is-resizing-sidebar');
@@ -49,6 +95,12 @@ function resizeWithKeyboard(event: KeyboardEvent) {
   event.preventDefault();
   const delta = event.key === 'ArrowLeft' ? -10 : 10;
   emit('update:width', clampWidth(props.width + delta));
+}
+
+function toggleSection(id: WorkSection['id']) {
+  const next = new Set(collapsedSections.value);
+  next.has(id) ? next.delete(id) : next.add(id);
+  collapsedSections.value = next;
 }
 
 onBeforeUnmount(stopResize);
@@ -66,16 +118,37 @@ onBeforeUnmount(stopResize);
     :inert="!open"
   >
     <div class="sidebar__body" :style="{ width: `${width}px` }">
-      <header class="sidebar__header">
-        <h1>Projects</h1>
-        <button class="icon-button" type="button" aria-label="Add project" title="Add project">
-          <svg viewBox="0 0 20 20" aria-hidden="true">
-            <path d="M10 4.25v11.5M4.25 10h11.5" />
-          </svg>
-        </button>
-      </header>
+      <nav class="sidebar__content" aria-label="Work">
+        <section v-for="section in sections" :key="section.id" class="work-section">
+          <button
+            class="work-section__header"
+            type="button"
+            :aria-expanded="!collapsedSections.has(section.id)"
+            @click="toggleSection(section.id)"
+          >
+            <span class="work-section__label">
+              <span>{{ section.label }}</span>
+              <span class="work-section__count">{{ section.items.length }}</span>
+            </span>
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path d="m4.5 6 3.5 3.5L11.5 6" />
+            </svg>
+          </button>
 
-      <nav class="sidebar__content" aria-label="Projects"></nav>
+          <div v-if="!collapsedSections.has(section.id)" class="work-section__items">
+            <button
+              v-for="item in section.items"
+              :key="item.id"
+              class="work-item"
+              type="button"
+            >
+              <span class="work-item__dot" :style="{ background: item.color }"></span>
+              <span class="work-item__title">{{ item.title }}</span>
+              <span class="work-item__meta">{{ item.meta }}</span>
+            </button>
+          </div>
+        </section>
+      </nav>
     </div>
 
     <div
@@ -119,21 +192,6 @@ onBeforeUnmount(stopResize);
   transition: none;
 }
 
-.sidebar__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 52px;
-  padding: 0 12px 0 16px;
-}
-
-.sidebar__header h1 {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
-
 .sidebar__body {
   height: 100%;
   padding-top: var(--titlebar-height);
@@ -141,42 +199,126 @@ onBeforeUnmount(stopResize);
 }
 
 .sidebar__content {
-  height: calc(100% - 52px);
+  height: 100%;
+  padding: 0 12px 24px;
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
 }
 
-.icon-button {
-  display: grid;
-  flex: 0 0 auto;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  place-items: center;
+.work-section + .work-section {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.work-section__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  height: 32px;
+  padding: 0 7px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 500;
   color: var(--text-secondary);
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 0.035em;
   background: transparent;
   border: 0;
-  border-radius: 7px;
+  border-radius: 6px;
   cursor: default;
 }
 
-.icon-button:hover {
-  color: var(--text-primary);
-  background: var(--surface-hover);
+.work-section__label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
 }
 
-.icon-button:focus-visible,
+.work-section__count {
+  display: grid;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  place-items: center;
+  font-size: 10px;
+  line-height: 1;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.055);
+  border-radius: 8px;
+}
+
+.work-section__header:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.work-section__header:focus-visible,
+.work-item:focus-visible,
 .sidebar__resize-handle:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 1px;
 }
 
-.icon-button svg {
-  width: 17px;
+.work-section__header svg {
+  width: 14px;
   fill: none;
   stroke: currentColor;
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 1.35;
+  transition: transform 120ms ease;
+}
+
+.work-section__header[aria-expanded='false'] svg {
+  transform: rotate(-90deg);
+}
+
+.work-section__items {
+  padding: 1px 0 5px;
+}
+
+.work-item {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  height: 39px;
+  padding: 0 7px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--text-primary);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: default;
+}
+
+.work-item:hover {
+  background: var(--surface-hover);
+}
+
+.work-item__dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.24);
+}
+
+.work-item__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.work-item__meta {
+  color: var(--text-secondary);
+  white-space: nowrap;
 }
 
 .sidebar__resize-handle {

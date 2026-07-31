@@ -6,7 +6,7 @@
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 
-  --titlebar-height: 52px;
+  --titlebar-height: 42px;
   --surface-content: #101116;
   --surface-sidebar: rgba(19, 20, 25, 0.52);
   --surface-hover: rgba(255, 255, 255, 0.07);
