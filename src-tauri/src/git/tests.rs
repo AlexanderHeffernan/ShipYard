@@ -1,4 +1,4 @@
-use super::{scan_project, work_status::WorkStatus};
+use super::{scan_project_with_conflicts, work_status::WorkStatus};
 use std::{fs, path::Path, path::PathBuf, process::Command, time::SystemTime};
 
 #[test]
@@ -7,7 +7,7 @@ fn includes_uncommitted_work_without_an_existing_branch_ref() {
     run(&root, &["init", "-b", "main"]);
     fs::write(root.join("first-file.txt"), "work in progress\n").unwrap();
 
-    let project = scan_project(root.to_str().unwrap()).unwrap();
+    let project = scan_project_with_conflicts(root.to_str().unwrap(), &[], &[]).unwrap();
     assert_eq!(project.work_items.len(), 1);
     assert_eq!(project.work_items[0].branch.as_deref(), Some("main"));
     assert_eq!(project.work_items[0].status, WorkStatus::Working);
@@ -18,13 +18,10 @@ fn includes_uncommitted_work_without_an_existing_branch_ref() {
 #[test]
 fn classifies_work_on_the_default_branch() {
     let root = committed_repository("default-branch");
-    assert!(scan_project(root.to_str().unwrap())
-        .unwrap()
-        .work_items
-        .is_empty());
+    assert!(scan(root.to_str().unwrap()).unwrap().work_items.is_empty());
 
     fs::write(root.join("README.md"), "initial\ndirty\n").unwrap();
-    let project = scan_project(root.to_str().unwrap()).unwrap();
+    let project = scan(root.to_str().unwrap()).unwrap();
     assert_eq!(project.work_items.len(), 1);
     assert_eq!(project.work_items[0].status, WorkStatus::Working);
 
@@ -67,7 +64,7 @@ fn associates_a_dirty_linked_worktree_with_its_branch() {
     );
     fs::write(linked.join("worktree.txt"), "in progress\n").unwrap();
     let canonical = linked.canonicalize().unwrap();
-    let project = scan_project(root.to_str().unwrap()).unwrap();
+    let project = scan(root.to_str().unwrap()).unwrap();
     let item = project
         .work_items
         .iter()
@@ -83,14 +80,60 @@ fn associates_a_dirty_linked_worktree_with_its_branch() {
     fs::remove_dir_all(root).unwrap();
 }
 
+#[test]
+fn fresh_clean_linked_worktree_is_working_until_explicitly_shipped() {
+    let root = committed_repository("fresh-worktree");
+    let linked = root.with_extension("fresh-linked");
+    run(
+        &root,
+        &[
+            "worktree",
+            "add",
+            "-b",
+            "work/fresh",
+            linked.to_str().unwrap(),
+            "main",
+        ],
+    );
+    assert_branch_status(&root, "work/fresh", WorkStatus::Working);
+
+    let id = item_id(&root, "work/fresh");
+    let sha = text(&root, &["rev-parse", "work/fresh"]);
+    let project = scan_project_with_conflicts(root.to_str().unwrap(), &[], &[(id, sha)]).unwrap();
+    let item = project
+        .work_items
+        .iter()
+        .find(|item| item.branch.as_deref() == Some("work/fresh"))
+        .unwrap();
+    assert_eq!(item.status, WorkStatus::Shipped);
+
+    run(&root, &["worktree", "remove", linked.to_str().unwrap()]);
+    fs::remove_dir_all(root).unwrap();
+}
+
 fn assert_branch_status(root: &Path, branch: &str, expected: WorkStatus) {
-    let project = scan_project(root.to_str().unwrap()).unwrap();
+    let project = scan(root.to_str().unwrap()).unwrap();
     let item = project
         .work_items
         .iter()
         .find(|item| item.branch.as_deref() == Some(branch))
         .unwrap();
     assert_eq!(item.status, expected);
+}
+
+fn scan(path: &str) -> Result<super::Project, String> {
+    scan_project_with_conflicts(path, &[], &[])
+}
+
+fn item_id(root: &Path, branch: &str) -> String {
+    let project = scan(root.to_str().unwrap()).unwrap();
+    project
+        .work_items
+        .iter()
+        .find(|item| item.branch.as_deref() == Some(branch))
+        .unwrap()
+        .id
+        .clone()
 }
 
 fn committed_repository(label: &str) -> PathBuf {
@@ -128,4 +171,15 @@ fn run(root: &Path, args: &[&str]) {
         args.join(" "),
         String::from_utf8_lossy(&output.stderr)
     );
+}
+
+fn text(root: &Path, args: &[&str]) -> String {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(args)
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    String::from_utf8(output.stdout).unwrap().trim().to_owned()
 }

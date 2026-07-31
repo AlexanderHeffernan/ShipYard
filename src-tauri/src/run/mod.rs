@@ -19,6 +19,9 @@ pub use run_request::RunRequest;
 pub use run_settings::RunSettings;
 pub use run_started::RunStarted;
 pub use script_input::ScriptInput;
+pub(crate) use store::{
+    delete_scoped_script, load_scoped_settings, save_scoped_script, scoped_script_path,
+};
 pub use store::{delete_script, load_settings, save_script};
 pub use terminal_size::TerminalSize;
 

@@ -26,6 +26,11 @@ pub(crate) fn belongs_to_project(project_id: &str, worktree_path: &str) -> Resul
     Ok(path_string(&common_dir) == project_id)
 }
 
+pub(crate) fn project_id(selected_path: &str) -> Result<String, String> {
+    let (_, common_dir) = resolve(selected_path)?;
+    Ok(path_string(&common_dir))
+}
+
 fn canonical_path(path: &Path) -> Result<PathBuf, String> {
     path.canonicalize()
         .map_err(|error| format!("could not resolve {}: {error}", path.display()))

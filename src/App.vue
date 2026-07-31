@@ -11,7 +11,8 @@ const sidebarOpen = ref(true);
 const sidebarWidth = ref(288);
 const selectedWorkItemId = ref<string | null>(null);
 const settingsProject = ref<Project | null>(null);
-const { projects, loading, error, loadProjects, addProject, removeProject } = useProjects();
+const settingsSection = ref<'run' | 'ship'>('run');
+const { projects, loading, error, loadProjects, addProject, rescanProject, removeProject } = useProjects();
 const selection = computed(() => {
   for (const project of projects.value) {
     const workItem = project.workItems.find((item) => item.id === selectedWorkItemId.value);
@@ -21,6 +22,16 @@ const selection = computed(() => {
 });
 
 onMounted(loadProjects);
+
+function openSettings(project: Project, section: 'run' | 'ship' = 'run') {
+  settingsProject.value = project;
+  settingsSection.value = section;
+}
+
+function openProjectSettings(projectId: string) {
+  const project = projects.value.find((candidate) => candidate.id === projectId);
+  if (project) openSettings(project);
+}
 </script>
 
 <template>
@@ -48,7 +59,7 @@ onMounted(loadProjects);
         :error="error"
         @add="addProject"
         @remove="removeProject"
-        @settings="settingsProject = projects.find((project) => project.id === $event) ?? null"
+        @settings="openProjectSettings"
       />
     </div>
 
@@ -65,13 +76,15 @@ onMounted(loadProjects);
         :project="selection?.project ?? null"
         :work-item="selection?.workItem ?? null"
         :sidebar-open="sidebarOpen"
-        @settings="settingsProject = $event"
+        @settings="openSettings"
+        @refresh="rescanProject"
       />
     </main>
 
     <ProjectSettingsModal
       v-if="settingsProject"
       :project="settingsProject"
+      :initial-section="settingsSection"
       @close="settingsProject = null"
     />
   </div>

@@ -21,6 +21,8 @@ export type ScriptInput = {
 export type RunState = {
   runId: string;
   projectId: string;
+  workItemId: string | null;
+  kind: 'run' | 'ship';
   scriptLabel: string;
   output: string;
   status: 'running' | 'stopping' | 'succeeded' | 'failed' | 'cancelled';

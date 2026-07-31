@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ExternalLink, Settings, Ship } from '@lucide/vue';
+import { ExternalLink, Settings } from '@lucide/vue';
 import { computed } from 'vue';
+import { openPath } from '@tauri-apps/plugin-opener';
 import AppButton from '../ui/AppButton.vue';
 import type { Project, WorkItem } from '../../types/projects';
 import { workItemKind, workItemMeta, workItemTitle } from '../../utils/workItems';
@@ -12,11 +13,19 @@ const props = defineProps<{
   sidebarOpen: boolean;
 }>();
 
-const emit = defineEmits<{ settings: [] }>();
+const emit = defineEmits<{ settings: [section?: 'run' | 'ship']; refresh: [] }>();
 
 const title = computed(() => workItemTitle(props.workItem));
 const kind = computed(() => workItemKind(props.project, props.workItem));
 const meta = computed(() => workItemMeta(props.workItem));
+const statusLabel = computed(() =>
+  props.workItem.status === 'mergeConflict' ? 'Merge Conflict' : props.workItem.status,
+);
+
+function openWorkItem() {
+  const path = props.workItem.resolutionPath ?? props.workItem.worktreePath;
+  if (path) void openPath(path);
+}
 </script>
 
 <template>
@@ -26,27 +35,29 @@ const meta = computed(() => workItemMeta(props.workItem));
         <span class="work-header__dot" :style="{ background: project.color }"></span>
         <h1>{{ title }}</h1>
         <span class="status-pill" :class="`status-pill--${workItem.status}`">
-          {{ workItem.status }}
+          {{ statusLabel }}
         </span>
       </div>
 
       <div class="work-header__actions">
-        <AppButton size="small" type="button" aria-disabled="true" title="Open options coming soon">
+        <AppButton
+          size="small"
+          type="button"
+          :disabled="!workItem.worktreePath && !workItem.resolutionPath"
+          :title="workItem.resolutionPath ? 'Open the default-branch worktree to resolve the merge' : 'Open worktree'"
+          @click="openWorkItem"
+        >
           <ExternalLink aria-hidden="true" />
           <span>Open</span>
         </AppButton>
-        <RunAction :project="project" :work-item="workItem" @settings="emit('settings')" />
-        <AppButton
-          class="work-header__ship"
-          variant="primary"
-          size="small"
-          type="button"
-          aria-disabled="true"
-          title="Shipping actions coming soon"
-        >
-          <Ship aria-hidden="true" />
-          <span>Ship</span>
-        </AppButton>
+        <RunAction :project="project" :work-item="workItem" @settings="emit('settings', $event)" />
+        <RunAction
+          mode="ship"
+          :project="project"
+          :work-item="workItem"
+          @settings="emit('settings', $event)"
+          @refresh="emit('refresh')"
+        />
         <AppButton
           class="work-header__settings"
           variant="ghost"
@@ -150,6 +161,12 @@ const meta = computed(() => workItemMeta(props.workItem));
   color: #64cf8c;
   background: rgba(62, 190, 111, 0.1);
   border-color: rgba(62, 190, 111, 0.19);
+}
+
+.status-pill--mergeConflict {
+  color: #ff8f8f;
+  background: rgba(255, 85, 85, 0.1);
+  border-color: rgba(255, 85, 85, 0.22);
 }
 
 .work-header__actions {

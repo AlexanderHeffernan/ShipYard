@@ -8,6 +8,7 @@ pub(super) struct WorkItem {
     pub(super) project_id: String,
     pub(super) branch: Option<String>,
     pub(super) worktree_path: Option<String>,
+    pub(super) resolution_path: Option<String>,
     pub(super) head_sha: String,
     pub(super) last_commit_subject: String,
     pub(super) status: WorkStatus,

@@ -10,7 +10,15 @@ use std::{
 };
 
 pub fn load_settings(base: &Path, project_id: &str) -> Result<RunSettings, String> {
-    let directory = project_directory(base, project_id);
+    load_scoped_settings(base, project_id, "run")
+}
+
+pub(crate) fn load_scoped_settings(
+    base: &Path,
+    project_id: &str,
+    scope: &str,
+) -> Result<RunSettings, String> {
+    let directory = scoped_directory(base, project_id, scope);
     let stored = read_stored_settings(&directory)?;
     let scripts = stored
         .scripts
@@ -28,8 +36,17 @@ pub fn save_script(
     project_id: &str,
     input: ScriptInput,
 ) -> Result<RunSettings, String> {
+    save_scoped_script(base, project_id, "run", input)
+}
+
+pub(crate) fn save_scoped_script(
+    base: &Path,
+    project_id: &str,
+    scope: &str,
+    input: ScriptInput,
+) -> Result<RunSettings, String> {
     validate_input(&input)?;
-    let directory = project_directory(base, project_id);
+    let directory = scoped_directory(base, project_id, scope);
     fs::create_dir_all(directory.join("scripts")).map_err(file_error)?;
     let mut settings = read_stored_settings(&directory)?;
     let id = resolve_script_id(&settings, input.id)?;
@@ -40,7 +57,7 @@ pub fn save_script(
         settings.default_script_id = Some(id);
     }
     write_settings(&directory, &settings)?;
-    load_settings(base, project_id)
+    load_scoped_settings(base, project_id, scope)
 }
 
 pub fn delete_script(
@@ -48,7 +65,16 @@ pub fn delete_script(
     project_id: &str,
     script_id: &str,
 ) -> Result<RunSettings, String> {
-    let directory = project_directory(base, project_id);
+    delete_scoped_script(base, project_id, "run", script_id)
+}
+
+pub(crate) fn delete_scoped_script(
+    base: &Path,
+    project_id: &str,
+    scope: &str,
+    script_id: &str,
+) -> Result<RunSettings, String> {
+    let directory = scoped_directory(base, project_id, scope);
     let mut settings = read_stored_settings(&directory)?;
     let script = settings
         .scripts
@@ -62,7 +88,7 @@ pub fn delete_script(
         settings.default_script_id = settings.scripts.first().map(|script| script.id.clone());
     }
     write_settings(&directory, &settings)?;
-    load_settings(base, project_id)
+    load_scoped_settings(base, project_id, scope)
 }
 
 pub(super) fn script_path(
@@ -70,7 +96,16 @@ pub(super) fn script_path(
     project_id: &str,
     script_id: &str,
 ) -> Result<PathBuf, String> {
-    let directory = project_directory(base, project_id);
+    scoped_script_path(base, project_id, "run", script_id)
+}
+
+pub(crate) fn scoped_script_path(
+    base: &Path,
+    project_id: &str,
+    scope: &str,
+    script_id: &str,
+) -> Result<PathBuf, String> {
+    let directory = scoped_directory(base, project_id, scope);
     let settings = read_stored_settings(&directory)?;
     let script = settings
         .scripts
@@ -177,6 +212,15 @@ fn atomic_write(path: &Path, content: &[u8]) -> Result<(), String> {
 fn project_directory(base: &Path, project_id: &str) -> PathBuf {
     let hash = Sha256::digest(project_id.as_bytes());
     base.join("projects").join(format!("{hash:x}"))
+}
+
+fn scoped_directory(base: &Path, project_id: &str, scope: &str) -> PathBuf {
+    let directory = project_directory(base, project_id);
+    if scope == "run" {
+        directory
+    } else {
+        directory.join(scope)
+    }
 }
 
 fn new_script_id() -> String {

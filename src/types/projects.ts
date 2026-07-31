@@ -1,10 +1,11 @@
-export type WorkStatus = 'working' | 'ready' | 'shipped';
+export type WorkStatus = 'working' | 'ready' | 'shipped' | 'mergeConflict';
 
 export type WorkItem = {
   id: string;
   projectId: string;
   branch: string | null;
   worktreePath: string | null;
+  resolutionPath: string | null;
   headSha: string;
   lastCommitSubject: string;
   status: WorkStatus;

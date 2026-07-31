@@ -23,8 +23,9 @@ const SECTION_LABELS: Record<WorkStatus, string> = {
   working: 'Working',
   ready: 'Ready',
   shipped: 'Shipped',
+  mergeConflict: 'Merge Conflict',
 };
-const SECTION_ORDER: WorkStatus[] = ['working', 'ready', 'shipped'];
+const SECTION_ORDER: WorkStatus[] = ['working', 'ready', 'mergeConflict', 'shipped'];
 
 const collapsedSections = ref(new Set<WorkSection['id']>());
 
