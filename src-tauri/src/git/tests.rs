@@ -1,4 +1,4 @@
-use super::{scan_project_with_conflicts, work_status::WorkStatus};
+use super::{scan_project_with_conflicts, validate_worktree, work_status::WorkStatus};
 use std::{fs, path::Path, path::PathBuf, process::Command, time::SystemTime};
 
 #[test]
@@ -108,6 +108,18 @@ fn fresh_clean_linked_worktree_is_working_until_explicitly_shipped() {
     assert_eq!(item.status, WorkStatus::Shipped);
 
     run(&root, &["worktree", "remove", linked.to_str().unwrap()]);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn validates_only_the_exact_checkout_for_its_project() {
+    let root = committed_repository("validate-worktree");
+    fs::create_dir(root.join("nested")).unwrap();
+    let project = scan(root.to_str().unwrap()).unwrap();
+    let validated = validate_worktree(&project.id, root.to_str().unwrap()).unwrap();
+    assert_eq!(validated, root.canonicalize().unwrap());
+    assert!(validate_worktree(&project.id, root.join("nested").to_str().unwrap()).is_err());
+    assert!(validate_worktree("another-project", root.to_str().unwrap()).is_err());
     fs::remove_dir_all(root).unwrap();
 }
 

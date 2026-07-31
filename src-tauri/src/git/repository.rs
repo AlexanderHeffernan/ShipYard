@@ -31,6 +31,16 @@ pub(crate) fn project_id(selected_path: &str) -> Result<String, String> {
     Ok(path_string(&common_dir))
 }
 
+pub(crate) fn validate_worktree(project_id: &str, path: &str) -> Result<PathBuf, String> {
+    let requested = canonical_path(Path::new(path))?;
+    let (root, common_dir) = resolve(path)
+        .map_err(|error| format!("selected checkout is not an available Git worktree: {error}"))?;
+    if root != requested || path_string(&common_dir) != project_id {
+        return Err("selected path is not a checkout for this project".to_owned());
+    }
+    Ok(root)
+}
+
 fn canonical_path(path: &Path) -> Result<PathBuf, String> {
     path.canonicalize()
         .map_err(|error| format!("could not resolve {}: {error}", path.display()))

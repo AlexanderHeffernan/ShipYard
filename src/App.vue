@@ -11,7 +11,7 @@ const sidebarOpen = ref(true);
 const sidebarWidth = ref(288);
 const selectedWorkItemId = ref<string | null>(null);
 const settingsProject = ref<Project | null>(null);
-const settingsSection = ref<'run' | 'ship'>('run');
+const settingsSection = ref<'open' | 'run' | 'ship'>('run');
 const { projects, loading, error, loadProjects, addProject, rescanProject, removeProject } = useProjects();
 const selection = computed(() => {
   for (const project of projects.value) {
@@ -23,7 +23,7 @@ const selection = computed(() => {
 
 onMounted(loadProjects);
 
-function openSettings(project: Project, section: 'run' | 'ship' = 'run') {
+function openSettings(project: Project, section: 'open' | 'run' | 'ship' = 'run') {
   settingsProject.value = project;
   settingsSection.value = section;
 }

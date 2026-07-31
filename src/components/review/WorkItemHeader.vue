@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { ExternalLink, Settings } from '@lucide/vue';
+import { Settings } from '@lucide/vue';
 import { computed } from 'vue';
-import { openPath } from '@tauri-apps/plugin-opener';
 import AppButton from '../ui/AppButton.vue';
 import type { Project, WorkItem } from '../../types/projects';
 import { workItemKind, workItemMeta, workItemTitle } from '../../utils/workItems';
+import OpenAction from './OpenAction.vue';
 import RunAction from './RunAction.vue';
 
 const props = defineProps<{
@@ -13,7 +13,7 @@ const props = defineProps<{
   sidebarOpen: boolean;
 }>();
 
-const emit = defineEmits<{ settings: [section?: 'run' | 'ship']; refresh: [] }>();
+const emit = defineEmits<{ settings: [section: 'open' | 'run' | 'ship']; refresh: [] }>();
 
 const title = computed(() => workItemTitle(props.workItem));
 const kind = computed(() => workItemKind(props.project, props.workItem));
@@ -21,11 +21,6 @@ const meta = computed(() => workItemMeta(props.workItem));
 const statusLabel = computed(() =>
   props.workItem.status === 'mergeConflict' ? 'Merge Conflict' : props.workItem.status,
 );
-
-function openWorkItem() {
-  const path = props.workItem.resolutionPath ?? props.workItem.worktreePath;
-  if (path) void openPath(path);
-}
 </script>
 
 <template>
@@ -40,16 +35,7 @@ function openWorkItem() {
       </div>
 
       <div class="work-header__actions">
-        <AppButton
-          size="small"
-          type="button"
-          :disabled="!workItem.worktreePath && !workItem.resolutionPath"
-          :title="workItem.resolutionPath ? 'Open the default-branch worktree to resolve the merge' : 'Open worktree'"
-          @click="openWorkItem"
-        >
-          <ExternalLink aria-hidden="true" />
-          <span>Open</span>
-        </AppButton>
+        <OpenAction :project="project" :work-item="workItem" @settings="emit('settings', 'open')" />
         <RunAction :project="project" :work-item="workItem" @settings="emit('settings', $event)" />
         <RunAction
           mode="ship"
@@ -65,7 +51,7 @@ function openWorkItem() {
           type="button"
           :aria-label="`Project settings for ${project.name}`"
           :title="`Project settings — ${project.name}`"
-          @click="emit('settings')"
+          @click="emit('settings', 'run')"
         >
           <Settings aria-hidden="true" />
         </AppButton>

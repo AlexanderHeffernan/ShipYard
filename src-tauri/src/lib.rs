@@ -1,4 +1,5 @@
 mod git;
+mod open;
 mod run;
 mod ship;
 
@@ -59,6 +60,51 @@ fn delete_ship_script(
             .map_err(|error| error.to_string())?,
         &project_id,
         &script_id,
+    )
+}
+
+#[tauri::command]
+fn get_open_settings(app: tauri::AppHandle) -> Result<open::OpenSettings, String> {
+    open::load_settings(
+        &app.path()
+            .app_data_dir()
+            .map_err(|error| error.to_string())?,
+    )
+}
+
+#[tauri::command]
+fn save_open_application(
+    app: tauri::AppHandle,
+    application: open::OpenApplicationInput,
+) -> Result<open::OpenSettings, String> {
+    open::save_application(
+        &app.path()
+            .app_data_dir()
+            .map_err(|error| error.to_string())?,
+        application,
+    )
+}
+
+#[tauri::command]
+fn delete_open_application(
+    app: tauri::AppHandle,
+    application_id: String,
+) -> Result<open::OpenSettings, String> {
+    open::delete_application(
+        &app.path()
+            .app_data_dir()
+            .map_err(|error| error.to_string())?,
+        &application_id,
+    )
+}
+
+#[tauri::command]
+fn open_checkout(app: tauri::AppHandle, request: open::OpenRequest) -> Result<(), String> {
+    open::open_checkout(
+        &app.path()
+            .app_data_dir()
+            .map_err(|error| error.to_string())?,
+        request,
     )
 }
 
@@ -154,6 +200,10 @@ pub fn run() {
             get_ship_settings,
             save_ship_script,
             delete_ship_script,
+            get_open_settings,
+            save_open_application,
+            delete_open_application,
+            open_checkout,
             get_run_settings,
             save_run_script,
             delete_run_script,

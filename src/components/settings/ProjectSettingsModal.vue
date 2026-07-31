@@ -1,19 +1,20 @@
 <script setup lang="ts">
-import { Play, Plus, Ship, TerminalSquare, Trash2, X } from '@lucide/vue';
+import { ExternalLink, Play, Plus, Ship, TerminalSquare, Trash2, X } from '@lucide/vue';
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue';
 import AppButton from '../ui/AppButton.vue';
+import OpenSettingsSection from './OpenSettingsSection.vue';
 import type { Project } from '../../types/projects';
 import type { RunScript, ScriptInput } from '../../types/run';
 import { useRunScripts } from '../../composables/useRunScripts';
 import { useShipScripts } from '../../composables/useShipScripts';
 
-const props = withDefaults(defineProps<{ project: Project; initialSection?: 'run' | 'ship' }>(), {
+const props = withDefaults(defineProps<{ project: Project; initialSection?: 'open' | 'run' | 'ship' }>(), {
   initialSection: 'run',
 });
 const emit = defineEmits<{ close: [] }>();
 const runScripts = useRunScripts();
 const shipScripts = useShipScripts();
-const activeSection = ref<'run' | 'ship'>(props.initialSection);
+const activeSection = ref<'open' | 'run' | 'ship'>(props.initialSection);
 const selectedId = ref<string | null>(null);
 const draft = ref<ScriptInput>(newDraft());
 const saving = ref(false);
@@ -38,6 +39,7 @@ watch(
   ([projectId]) => {
     selectedId.value = null;
     error.value = null;
+    if (activeSection.value === 'open') return;
     void scriptStore.value.load(projectId).catch((loadError) => (error.value = String(loadError)));
   },
   { immediate: true },
@@ -134,6 +136,10 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown));
 
       <div class="settings-layout">
         <nav class="settings-nav" aria-label="Project settings">
+          <button :class="{ 'settings-nav__active': activeSection === 'open' }" type="button" @click="activeSection = 'open'">
+            <ExternalLink aria-hidden="true" />
+            Open
+          </button>
           <button :class="{ 'settings-nav__active': activeSection === 'run' }" type="button" @click="activeSection = 'run'">
             <Play aria-hidden="true" />
             Run
@@ -144,7 +150,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown));
           </button>
         </nav>
 
-        <main class="run-settings">
+        <main v-if="activeSection !== 'open'" class="run-settings">
           <div class="run-settings__heading">
             <div>
               <h3>{{ actionName }} scripts</h3>
@@ -213,6 +219,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown));
             </form>
           </div>
         </main>
+        <OpenSettingsSection v-else />
       </div>
     </section>
   </div>
