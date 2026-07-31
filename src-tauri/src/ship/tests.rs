@@ -1,8 +1,8 @@
 use super::{
     active_states, context::ShipContext, load_settings, record_conflict, record_success,
-    script_path,
+    save_script, script_path, settings::LEGACY_DEFAULT_SCRIPT,
 };
-use crate::git;
+use crate::{git, run::ScriptInput};
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -23,6 +23,30 @@ fn provides_a_conservative_default_script() {
 }
 
 #[test]
+fn upgrades_the_unchanged_legacy_default_script() {
+    let data = temporary_directory("upgrade-settings");
+    let original = load_settings(&data, "project").unwrap();
+    let id = original.default_script_id.unwrap();
+    save_script(
+        &data,
+        "project",
+        ScriptInput {
+            id: Some(id),
+            label: "Merge into default branch".to_owned(),
+            content: LEGACY_DEFAULT_SCRIPT.to_owned(),
+            make_default: true,
+        },
+    )
+    .unwrap();
+
+    let upgraded = load_settings(&data, "project").unwrap();
+    assert!(upgraded.scripts[0]
+        .content
+        .contains("merge-tree --write-tree"));
+    fs::remove_dir_all(data).unwrap();
+}
+
+#[test]
 fn default_script_merges_the_validated_source_commit() {
     let (root, source, data, context) = repository_fixture("default-success");
     let settings = load_settings(&data, &context.project_id).unwrap();
@@ -32,16 +56,33 @@ fn default_script_merges_the_validated_source_commit() {
         settings.default_script_id.as_deref().unwrap(),
     )
     .unwrap();
-    let status = Command::new("/bin/zsh")
-        .arg(script)
-        .env("SHIPYARD_WORKTREE_PATH", &context.source_path)
-        .env("SHIPYARD_SOURCE_SHA", &context.source_sha)
-        .env("SHIPYARD_DEFAULT_BRANCH", &context.default_branch)
-        .env("SHIPYARD_TARGET_WORKTREE_PATH", &context.target_path)
-        .status()
-        .unwrap();
+    let status = ship_command(&script, &context).status().unwrap();
     assert!(status.success());
     assert!(git::is_merged(root.to_str().unwrap(), &context.source_sha, "main").unwrap());
+    cleanup(root, source, data);
+}
+
+#[test]
+fn default_script_detects_conflicts_without_touching_the_target() {
+    let (root, source, data, context) = conflicting_repository_fixture();
+    let settings = load_settings(&data, &context.project_id).unwrap();
+    let script = script_path(
+        &data,
+        &context.project_id,
+        settings.default_script_id.as_deref().unwrap(),
+    )
+    .unwrap();
+    let target_sha = text(&root, &["rev-parse", "HEAD"]);
+    let output = ship_command(&script, &context).output().unwrap();
+
+    assert!(!output.status.success());
+    assert_eq!(text(&root, &["rev-parse", "HEAD"]), target_sha);
+    assert!(!root.join(".git/MERGE_HEAD").exists());
+    assert!(text(&root, &["status", "--porcelain"]).is_empty());
+    assert_eq!(
+        fs::read_to_string(root.join("base.txt")).unwrap(),
+        "target\n"
+    );
     cleanup(root, source, data);
 }
 
@@ -151,6 +192,30 @@ fn repository_fixture(label: &str) -> (PathBuf, PathBuf, PathBuf, ShipContext) {
         target_path: root.clone(),
     };
     (root, source, data, context)
+}
+
+fn conflicting_repository_fixture() -> (PathBuf, PathBuf, PathBuf, ShipContext) {
+    let (root, source, data, mut context) = repository_fixture("preflight-conflict");
+    fs::write(source.join("base.txt"), "source\n").unwrap();
+    run(&source, &["add", "base.txt"]);
+    run(&source, &["commit", "-m", "Change base on source"]);
+    context.source_sha = text(&source, &["rev-parse", "HEAD"]);
+
+    fs::write(root.join("base.txt"), "target\n").unwrap();
+    run(&root, &["add", "base.txt"]);
+    run(&root, &["commit", "-m", "Change base on target"]);
+    (root, source, data, context)
+}
+
+fn ship_command(script: &Path, context: &ShipContext) -> Command {
+    let mut command = Command::new("/bin/zsh");
+    command
+        .arg(script)
+        .env("SHIPYARD_WORKTREE_PATH", &context.source_path)
+        .env("SHIPYARD_SOURCE_SHA", &context.source_sha)
+        .env("SHIPYARD_DEFAULT_BRANCH", &context.default_branch)
+        .env("SHIPYARD_TARGET_WORKTREE_PATH", &context.target_path);
+    command
 }
 
 fn cleanup(root: PathBuf, source: PathBuf, data: PathBuf) {

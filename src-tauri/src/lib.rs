@@ -2,6 +2,7 @@ mod git;
 mod open;
 mod run;
 mod ship;
+mod watch;
 
 use tauri::Manager;
 
@@ -109,6 +110,23 @@ fn open_checkout(app: tauri::AppHandle, request: open::OpenRequest) -> Result<()
 }
 
 #[tauri::command]
+fn start_project_watch(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, watch::WatchManager>,
+    path: String,
+) -> Result<(), String> {
+    state.start(app, &path)
+}
+
+#[tauri::command]
+fn stop_project_watch(
+    state: tauri::State<'_, watch::WatchManager>,
+    project_id: String,
+) -> Result<(), String> {
+    state.stop(&project_id)
+}
+
+#[tauri::command]
 fn get_run_settings(app: tauri::AppHandle, project_id: String) -> Result<run::RunSettings, String> {
     run::load_settings(
         &app.path()
@@ -193,6 +211,7 @@ fn resize_run_terminal(
 pub fn run() {
     let app = tauri::Builder::default()
         .manage(run::RunManager::default())
+        .manage(watch::WatchManager::default())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
@@ -204,6 +223,8 @@ pub fn run() {
             save_open_application,
             delete_open_application,
             open_checkout,
+            start_project_watch,
+            stop_project_watch,
             get_run_settings,
             save_run_script,
             delete_run_script,
@@ -218,6 +239,7 @@ pub fn run() {
     app.run(|handle, event| {
         if matches!(event, tauri::RunEvent::ExitRequested { .. }) {
             handle.state::<run::RunManager>().terminate_all();
+            handle.state::<watch::WatchManager>().stop_all();
         }
     });
 }
