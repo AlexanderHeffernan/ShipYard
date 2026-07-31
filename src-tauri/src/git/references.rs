@@ -105,6 +105,12 @@ fn is_ancestor(root: &Path, ancestor: &str, descendant: &str) -> Result<bool, St
     }
 }
 
+pub(super) fn same_commit(root: &Path, left: &str, right: &str) -> Result<bool, String> {
+    let left = command::text(root, &["rev-parse", left])?;
+    let right = command::text(root, &["rev-parse", right])?;
+    Ok(left.trim() == right.trim())
+}
+
 pub(super) fn commit_details(worktree: &Path) -> Result<(String, u64), String> {
     let details = command::text(worktree, &["show", "-s", "--format=%s%x00%ct", "HEAD"])?;
     let mut fields = details.split('\0');

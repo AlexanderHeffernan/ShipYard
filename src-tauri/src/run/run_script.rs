@@ -7,5 +7,5 @@ pub struct RunScript {
     pub(super) label: String,
     pub(super) file_name: String,
     pub(super) file_path: String,
-    pub(super) content: String,
+    pub(crate) content: String,
 }

@@ -81,6 +81,17 @@ export function useProjects() {
     }
   }
 
+  async function rescanProject(id: string) {
+    const index = projects.value.findIndex((project) => project.id === id);
+    if (index === -1) return;
+    try {
+      const scanned = withColor(await scanProject(projects.value[index].path));
+      projects.value = projects.value.map((project) => (project.id === id ? scanned : project));
+    } catch (scanError) {
+      error.value = errorMessage(scanError);
+    }
+  }
+
   function removeProject(id: string) {
     projects.value = projects.value.filter((project) => project.id !== id);
     savePaths(projects.value);
@@ -92,6 +103,7 @@ export function useProjects() {
     error,
     loadProjects,
     addProject,
+    rescanProject,
     removeProject,
   };
 }

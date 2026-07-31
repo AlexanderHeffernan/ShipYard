@@ -1,20 +1,27 @@
 <script setup lang="ts">
-import { Play, Plus, TerminalSquare, Trash2, X } from '@lucide/vue';
+import { Play, Plus, Ship, TerminalSquare, Trash2, X } from '@lucide/vue';
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue';
 import AppButton from '../ui/AppButton.vue';
 import type { Project } from '../../types/projects';
 import type { RunScript, ScriptInput } from '../../types/run';
 import { useRunScripts } from '../../composables/useRunScripts';
+import { useShipScripts } from '../../composables/useShipScripts';
 
-const props = defineProps<{ project: Project }>();
+const props = withDefaults(defineProps<{ project: Project; initialSection?: 'run' | 'ship' }>(), {
+  initialSection: 'run',
+});
 const emit = defineEmits<{ close: [] }>();
-const { settingsByProject, load, save, remove } = useRunScripts();
+const runScripts = useRunScripts();
+const shipScripts = useShipScripts();
+const activeSection = ref<'run' | 'ship'>(props.initialSection);
 const selectedId = ref<string | null>(null);
 const draft = ref<ScriptInput>(newDraft());
 const saving = ref(false);
 const error = ref<string | null>(null);
-const settings = computed(() => settingsByProject.value[props.project.id]);
+const scriptStore = computed(() => (activeSection.value === 'ship' ? shipScripts : runScripts));
+const settings = computed(() => scriptStore.value.settingsByProject.value[props.project.id]);
 const scripts = computed(() => settings.value?.scripts ?? []);
+const actionName = computed(() => (activeSection.value === 'ship' ? 'Ship' : 'Run'));
 
 watch(
   () => settings.value,
@@ -27,20 +34,21 @@ watch(
 );
 
 watch(
-  () => props.project.id,
-  (projectId) => {
+  () => [props.project.id, activeSection.value] as const,
+  ([projectId]) => {
     selectedId.value = null;
     error.value = null;
-    void load(projectId).catch((loadError) => (error.value = String(loadError)));
+    void scriptStore.value.load(projectId).catch((loadError) => (error.value = String(loadError)));
   },
   { immediate: true },
 );
 
 function newDraft(): ScriptInput {
+  const ship = activeSection.value === 'ship';
   return {
     id: null,
-    label: 'Run project',
-    content: '#!/bin/zsh\nset -e\n\n# Add your commands here\n',
+    label: ship ? 'Ship work' : 'Run project',
+    content: '#!/bin/zsh\nset -euo pipefail\n\n# Add your commands here\n',
     makeDefault: false,
   };
 }
@@ -61,11 +69,11 @@ async function addScript() {
   error.value = null;
   const input = {
     ...newDraft(),
-    label: scripts.value.length === 0 ? 'Run project' : `Run script ${scripts.value.length + 1}`,
+    label: scripts.value.length === 0 ? `${actionName.value} project` : `${actionName.value} script ${scripts.value.length + 1}`,
     makeDefault: scripts.value.length === 0,
   };
   try {
-    const updated = await save(props.project.id, input);
+    const updated = await scriptStore.value.save(props.project.id, input);
     const created = updated.scripts[updated.scripts.length - 1];
     if (created) selectScript(created);
   } catch (saveError) {
@@ -79,7 +87,7 @@ async function saveDraft() {
   saving.value = true;
   error.value = null;
   try {
-    const updated = await save(props.project.id, draft.value);
+    const updated = await scriptStore.value.save(props.project.id, draft.value);
     const selected = updated.scripts.find((script) => script.id === draft.value.id);
     if (selected) selectScript(selected);
   } catch (saveError) {
@@ -92,7 +100,7 @@ async function saveDraft() {
 async function deleteSelected() {
   if (!selectedId.value || !window.confirm(`Delete “${draft.value.label}”?`)) return;
   try {
-    const updated = await remove(props.project.id, selectedId.value);
+    const updated = await scriptStore.value.remove(props.project.id, selectedId.value);
     selectedId.value = null;
     const next = updated.scripts.find((script) => script.id === updated.defaultScriptId) ?? updated.scripts[0];
     if (next) selectScript(next);
@@ -126,17 +134,21 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown));
 
       <div class="settings-layout">
         <nav class="settings-nav" aria-label="Project settings">
-          <button class="settings-nav__active" type="button">
+          <button :class="{ 'settings-nav__active': activeSection === 'run' }" type="button" @click="activeSection = 'run'">
             <Play aria-hidden="true" />
             Run
+          </button>
+          <button :class="{ 'settings-nav__active': activeSection === 'ship' }" type="button" @click="activeSection = 'ship'">
+            <Ship aria-hidden="true" />
+            Ship
           </button>
         </nav>
 
         <main class="run-settings">
           <div class="run-settings__heading">
             <div>
-              <h3>Run scripts</h3>
-              <p>Commands available from this project’s Run button.</p>
+              <h3>{{ actionName }} scripts</h3>
+              <p>Commands available from this project’s {{ actionName }} button.</p>
             </div>
             <AppButton v-if="scripts.length > 0" type="button" :disabled="saving" @click="addScript">
               <Plus aria-hidden="true" />
@@ -148,8 +160,8 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown));
 
           <div v-else-if="scripts.length === 0" class="run-settings__empty">
             <span class="run-settings__empty-icon"><TerminalSquare aria-hidden="true" /></span>
-            <h4>No run scripts yet</h4>
-            <p>Add a script to run this project without leaving Shipyard.</p>
+            <h4>No {{ actionName.toLowerCase() }} scripts yet</h4>
+            <p>Add a script to {{ actionName.toLowerCase() }} this project without leaving Shipyard.</p>
             <AppButton variant="primary" type="button" :disabled="saving" @click="addScript">
               <Plus aria-hidden="true" />
               {{ saving ? 'Adding…' : 'Add script' }}
@@ -182,7 +194,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown));
               </label>
               <label class="script-editor__default">
                 <input v-model="draft.makeDefault" type="checkbox" />
-                Use as the default Run script
+                Use as the default {{ actionName }} script
               </label>
               <p v-if="selectedId" class="script-editor__path">
                 {{ settings?.scripts.find((script) => script.id === selectedId)?.filePath }}
@@ -214,7 +226,8 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown));
 .settings-header span { display: block; margin-top: 3px; font-size: 11px; color: var(--text-secondary); }
 .settings-layout { display: flex; min-height: 0; flex: 1; }
 .settings-nav { flex: 0 0 160px; padding: 12px 9px; background: rgba(255,255,255,.018); border-right: 1px solid var(--border-subtle); }
-.settings-nav button { display: flex; align-items: center; gap: 9px; width: 100%; height: 34px; padding: 0 10px; font: inherit; font-size: 12px; color: var(--text-primary); background: var(--surface-hover); border: 0; border-radius: 6px; }
+.settings-nav button { display: flex; align-items: center; gap: 9px; width: 100%; height: 34px; padding: 0 10px; font: inherit; font-size: 12px; color: var(--text-secondary); background: transparent; border: 0; border-radius: 6px; }
+.settings-nav button:hover, .settings-nav__active { color: var(--text-primary) !important; background: var(--surface-hover) !important; }
 .settings-nav svg { width: 13px; height: 13px; stroke-width: 1.7; }
 .run-settings { display: flex; min-width: 0; flex: 1; flex-direction: column; padding: 22px; }
 .run-settings__heading { display: flex; flex: 0 0 auto; align-items: start; justify-content: space-between; margin-bottom: 18px; }

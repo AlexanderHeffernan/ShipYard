@@ -4,6 +4,6 @@ use serde::Serialize;
 #[derive(Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RunSettings {
-    pub(super) default_script_id: Option<String>,
-    pub(super) scripts: Vec<RunScript>,
+    pub(crate) default_script_id: Option<String>,
+    pub(crate) scripts: Vec<RunScript>,
 }

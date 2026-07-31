@@ -3,7 +3,7 @@ use super::{
     run_request::RunRequest, run_session::RunSession, run_started::RunStarted,
     spawned_terminal::SpawnedTerminal, store, terminal_size::TerminalSize,
 };
-use crate::git;
+use crate::{git, ship};
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 use std::{
     io::Read,
@@ -41,6 +41,36 @@ impl RunManager {
             terminal.child,
             output,
             self.sessions.clone(),
+            None,
+        );
+        Ok(RunStarted { run_id })
+    }
+
+    pub fn start_ship(
+        &self,
+        app: tauri::AppHandle,
+        request: ship::ShipRequest,
+    ) -> Result<RunStarted, String> {
+        let data_dir = app
+            .path()
+            .app_data_dir()
+            .map_err(|error| error.to_string())?;
+        let script_path = ship::script_path(&data_dir, &request.project_id, &request.script_id)?;
+        let context = ship::ShipContext::validated(request)?;
+        let run_id = format!("run-{}", self.next_id.fetch_add(1, Ordering::Relaxed));
+        let terminal = spawn_ship_terminal(&script_path, &context)?;
+        self.sessions
+            .lock()
+            .map_err(lock_error)?
+            .insert(run_id.clone(), terminal.session.clone());
+        let output = stream_output(app.clone(), run_id.clone(), terminal.reader);
+        wait_for_exit(
+            app,
+            run_id.clone(),
+            terminal.child,
+            output,
+            self.sessions.clone(),
+            Some(context),
         );
         Ok(RunStarted { run_id })
     }
@@ -82,6 +112,27 @@ pub(super) fn spawn_terminal(
     script: &Path,
     working_directory: &str,
 ) -> Result<SpawnedTerminal, String> {
+    spawn_command(run_command(script, working_directory))
+}
+
+fn spawn_ship_terminal(
+    script: &Path,
+    context: &ship::ShipContext,
+) -> Result<SpawnedTerminal, String> {
+    let mut command = run_command(script, context.source_path.to_string_lossy().as_ref());
+    command.env("SHIPYARD_PROJECT_ID", &context.project_id);
+    command.env("SHIPYARD_WORK_ITEM_ID", &context.work_item_id);
+    command.env("SHIPYARD_SOURCE_SHA", &context.source_sha);
+    command.env(
+        "SHIPYARD_SOURCE_BRANCH",
+        context.source_branch.as_deref().unwrap_or(""),
+    );
+    command.env("SHIPYARD_DEFAULT_BRANCH", &context.default_branch);
+    command.env("SHIPYARD_TARGET_WORKTREE_PATH", &context.target_path);
+    spawn_command(command)
+}
+
+fn spawn_command(command: CommandBuilder) -> Result<SpawnedTerminal, String> {
     let pair = native_pty_system()
         .openpty(INITIAL_TERMINAL_SIZE)
         .map_err(|error| error.to_string())?;
@@ -95,7 +146,7 @@ pub(super) fn spawn_terminal(
         .map_err(|error| error.to_string())?;
     let child = pair
         .slave
-        .spawn_command(run_command(script, working_directory))
+        .spawn_command(command)
         .map_err(|error| format!("could not start run script: {error}"))?;
     let killer = child.clone_killer();
     #[cfg(unix)]
@@ -161,6 +212,7 @@ fn wait_for_exit(
     mut child: Box<dyn portable_pty::Child + Send + Sync>,
     output: thread::JoinHandle<()>,
     sessions: Arc<std::sync::Mutex<std::collections::HashMap<String, Arc<RunSession>>>>,
+    ship_context: Option<ship::ShipContext>,
 ) {
     thread::spawn(move || {
         let status = child.wait();
@@ -180,8 +232,23 @@ fn wait_for_exit(
                 success: false,
             },
         };
+        persist_ship_result(&app, ship_context.as_ref(), event.success);
         let _ = app.emit("run-finished", event);
     });
+}
+
+fn persist_ship_result(app: &tauri::AppHandle, context: Option<&ship::ShipContext>, success: bool) {
+    let Some(context) = context else {
+        return;
+    };
+    let Ok(base) = app.path().app_data_dir() else {
+        return;
+    };
+    if success {
+        let _ = ship::record_success(&base, context);
+    } else {
+        let _ = ship::record_conflict(&base, context);
+    }
 }
 
 fn force_termination(
