@@ -10,7 +10,7 @@ defineProps<{
   sidebarOpen: boolean;
 }>();
 
-const emit = defineEmits<{ settings: [project: Project] }>();
+const emit = defineEmits<{ settings: [project: Project, section: 'run' | 'open'] }>();
 
 type ReviewTab = 'changes' | 'commits';
 
@@ -23,7 +23,7 @@ const activeTab = ref<ReviewTab>('changes');
       :project="project"
       :work-item="workItem"
       :sidebar-open="sidebarOpen"
-      @settings="emit('settings', project)"
+      @settings="emit('settings', project, $event)"
     />
 
     <nav class="review-tabs" aria-label="Work item details">

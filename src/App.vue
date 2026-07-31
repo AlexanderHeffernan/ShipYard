@@ -10,7 +10,7 @@ import type { Project } from './types/projects';
 const sidebarOpen = ref(true);
 const sidebarWidth = ref(288);
 const selectedWorkItemId = ref<string | null>(null);
-const settingsProject = ref<Project | null>(null);
+const settingsTarget = ref<{ project: Project; section: 'run' | 'open' } | null>(null);
 const { projects, loading, error, loadProjects, addProject, removeProject } = useProjects();
 const selection = computed(() => {
   for (const project of projects.value) {
@@ -19,6 +19,15 @@ const selection = computed(() => {
   }
   return null;
 });
+
+function openSettings(project: Project, section: 'run' | 'open' = 'run') {
+  settingsTarget.value = { project, section };
+}
+
+function openProjectSettings(projectId: string) {
+  const project = projects.value.find((candidate) => candidate.id === projectId);
+  if (project) openSettings(project);
+}
 
 onMounted(loadProjects);
 </script>
@@ -48,7 +57,7 @@ onMounted(loadProjects);
         :error="error"
         @add="addProject"
         @remove="removeProject"
-        @settings="settingsProject = projects.find((project) => project.id === $event) ?? null"
+        @settings="openProjectSettings"
       />
     </div>
 
@@ -65,14 +74,15 @@ onMounted(loadProjects);
         :project="selection?.project ?? null"
         :work-item="selection?.workItem ?? null"
         :sidebar-open="sidebarOpen"
-        @settings="settingsProject = $event"
+        @settings="openSettings"
       />
     </main>
 
     <ProjectSettingsModal
-      v-if="settingsProject"
-      :project="settingsProject"
-      @close="settingsProject = null"
+      v-if="settingsTarget"
+      :project="settingsTarget.project"
+      :initial-section="settingsTarget.section"
+      @close="settingsTarget = null"
     />
   </div>
 </template>

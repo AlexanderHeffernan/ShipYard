@@ -1,18 +1,20 @@
 <script setup lang="ts">
-import { Play, Plus, TerminalSquare, Trash2, X } from '@lucide/vue';
+import { ExternalLink, Play, Plus, TerminalSquare, Trash2, X } from '@lucide/vue';
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue';
 import AppButton from '../ui/AppButton.vue';
+import OpenSettingsSection from './OpenSettingsSection.vue';
 import type { Project } from '../../types/projects';
 import type { RunScript, ScriptInput } from '../../types/run';
 import { useRunScripts } from '../../composables/useRunScripts';
 
-const props = defineProps<{ project: Project }>();
+const props = defineProps<{ project: Project; initialSection?: 'run' | 'open' }>();
 const emit = defineEmits<{ close: [] }>();
 const { settingsByProject, load, save, remove } = useRunScripts();
 const selectedId = ref<string | null>(null);
 const draft = ref<ScriptInput>(newDraft());
 const saving = ref(false);
 const error = ref<string | null>(null);
+const activeSection = ref(props.initialSection ?? 'run');
 const settings = computed(() => settingsByProject.value[props.project.id]);
 const scripts = computed(() => settings.value?.scripts ?? []);
 
@@ -126,13 +128,25 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown));
 
       <div class="settings-layout">
         <nav class="settings-nav" aria-label="Project settings">
-          <button class="settings-nav__active" type="button">
+          <button
+            :class="{ 'settings-nav__active': activeSection === 'run' }"
+            type="button"
+            @click="activeSection = 'run'"
+          >
             <Play aria-hidden="true" />
             Run
           </button>
+          <button
+            :class="{ 'settings-nav__active': activeSection === 'open' }"
+            type="button"
+            @click="activeSection = 'open'"
+          >
+            <ExternalLink aria-hidden="true" />
+            Open
+          </button>
         </nav>
 
-        <main class="run-settings">
+        <main v-if="activeSection === 'run'" class="run-settings">
           <div class="run-settings__heading">
             <div>
               <h3>Run scripts</h3>
@@ -201,6 +215,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown));
             </form>
           </div>
         </main>
+        <OpenSettingsSection v-else />
       </div>
     </section>
   </div>
@@ -214,7 +229,8 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown));
 .settings-header span { display: block; margin-top: 3px; font-size: 11px; color: var(--text-secondary); }
 .settings-layout { display: flex; min-height: 0; flex: 1; }
 .settings-nav { flex: 0 0 160px; padding: 12px 9px; background: rgba(255,255,255,.018); border-right: 1px solid var(--border-subtle); }
-.settings-nav button { display: flex; align-items: center; gap: 9px; width: 100%; height: 34px; padding: 0 10px; font: inherit; font-size: 12px; color: var(--text-primary); background: var(--surface-hover); border: 0; border-radius: 6px; }
+.settings-nav button { display: flex; align-items: center; gap: 9px; width: 100%; height: 34px; padding: 0 10px; font: inherit; font-size: 12px; color: var(--text-secondary); background: transparent; border: 0; border-radius: 6px; }
+.settings-nav button:hover, .settings-nav__active { color: var(--text-primary) !important; background: var(--surface-hover) !important; }
 .settings-nav svg { width: 13px; height: 13px; stroke-width: 1.7; }
 .run-settings { display: flex; min-width: 0; flex: 1; flex-direction: column; padding: 22px; }
 .run-settings__heading { display: flex; flex: 0 0 auto; align-items: start; justify-content: space-between; margin-bottom: 18px; }

@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ExternalLink, Settings, Ship } from '@lucide/vue';
+import { Settings, Ship } from '@lucide/vue';
 import { computed } from 'vue';
 import AppButton from '../ui/AppButton.vue';
 import type { Project, WorkItem } from '../../types/projects';
 import { workItemKind, workItemMeta, workItemTitle } from '../../utils/workItems';
+import OpenAction from './OpenAction.vue';
 import RunAction from './RunAction.vue';
 
 const props = defineProps<{
@@ -12,7 +13,7 @@ const props = defineProps<{
   sidebarOpen: boolean;
 }>();
 
-const emit = defineEmits<{ settings: [] }>();
+const emit = defineEmits<{ settings: [section: 'run' | 'open'] }>();
 
 const title = computed(() => workItemTitle(props.workItem));
 const kind = computed(() => workItemKind(props.project, props.workItem));
@@ -31,11 +32,8 @@ const meta = computed(() => workItemMeta(props.workItem));
       </div>
 
       <div class="work-header__actions">
-        <AppButton size="small" type="button" aria-disabled="true" title="Open options coming soon">
-          <ExternalLink aria-hidden="true" />
-          <span>Open</span>
-        </AppButton>
-        <RunAction :project="project" :work-item="workItem" @settings="emit('settings')" />
+        <OpenAction :project="project" :work-item="workItem" @settings="emit('settings', 'open')" />
+        <RunAction :project="project" :work-item="workItem" @settings="emit('settings', 'run')" />
         <AppButton
           class="work-header__ship"
           variant="primary"
@@ -54,7 +52,7 @@ const meta = computed(() => workItemMeta(props.workItem));
           type="button"
           :aria-label="`Project settings for ${project.name}`"
           :title="`Project settings — ${project.name}`"
-          @click="emit('settings')"
+          @click="emit('settings', 'run')"
         >
           <Settings aria-hidden="true" />
         </AppButton>

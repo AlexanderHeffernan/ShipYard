@@ -1,4 +1,4 @@
-use super::{scan_project, work_status::WorkStatus};
+use super::{scan_project, validate_worktree, work_status::WorkStatus};
 use std::{fs, path::Path, path::PathBuf, process::Command, time::SystemTime};
 
 #[test]
@@ -80,6 +80,18 @@ fn associates_a_dirty_linked_worktree_with_its_branch() {
         &root,
         &["worktree", "remove", "--force", linked.to_str().unwrap()],
     );
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn validates_only_the_exact_checkout_for_its_project() {
+    let root = committed_repository("validate-worktree");
+    fs::create_dir(root.join("nested")).unwrap();
+    let project = scan_project(root.to_str().unwrap()).unwrap();
+    let validated = validate_worktree(&project.id, root.to_str().unwrap()).unwrap();
+    assert_eq!(validated, root.canonicalize().unwrap());
+    assert!(validate_worktree(&project.id, root.join("nested").to_str().unwrap()).is_err());
+    assert!(validate_worktree("another-project", root.to_str().unwrap()).is_err());
     fs::remove_dir_all(root).unwrap();
 }
 

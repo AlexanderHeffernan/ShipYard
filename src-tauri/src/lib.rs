@@ -1,4 +1,5 @@
 mod git;
+mod open;
 mod run;
 
 use tauri::Manager;
@@ -8,6 +9,51 @@ async fn scan_project(path: String) -> Result<git::Project, String> {
     tauri::async_runtime::spawn_blocking(move || git::scan_project(&path))
         .await
         .map_err(|error| format!("project scan failed: {error}"))?
+}
+
+#[tauri::command]
+fn get_open_settings(app: tauri::AppHandle) -> Result<open::OpenSettings, String> {
+    open::load_settings(
+        &app.path()
+            .app_data_dir()
+            .map_err(|error| error.to_string())?,
+    )
+}
+
+#[tauri::command]
+fn save_open_application(
+    app: tauri::AppHandle,
+    application: open::OpenApplicationInput,
+) -> Result<open::OpenSettings, String> {
+    open::save_application(
+        &app.path()
+            .app_data_dir()
+            .map_err(|error| error.to_string())?,
+        application,
+    )
+}
+
+#[tauri::command]
+fn delete_open_application(
+    app: tauri::AppHandle,
+    application_id: String,
+) -> Result<open::OpenSettings, String> {
+    open::delete_application(
+        &app.path()
+            .app_data_dir()
+            .map_err(|error| error.to_string())?,
+        &application_id,
+    )
+}
+
+#[tauri::command]
+fn open_checkout(app: tauri::AppHandle, request: open::OpenRequest) -> Result<(), String> {
+    open::open_checkout(
+        &app.path()
+            .app_data_dir()
+            .map_err(|error| error.to_string())?,
+        request,
+    )
 }
 
 #[tauri::command]
@@ -90,6 +136,10 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             scan_project,
+            get_open_settings,
+            save_open_application,
+            delete_open_application,
+            open_checkout,
             get_run_settings,
             save_run_script,
             delete_run_script,
