@@ -1,64 +1,91 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref } from 'vue';
+import { computed, onBeforeUnmount, ref } from 'vue';
+import type { Project, WorkItem, WorkStatus } from '../../types/projects';
 
 const MIN_WIDTH = 224;
 const MAX_WIDTH = 420;
 
-type WorkItem = {
-  id: number;
+type SidebarWorkItem = WorkItem & {
   title: string;
   meta: string;
   color: string;
+  projectName: string;
 };
 
 type WorkSection = {
-  id: 'working' | 'ready' | 'shipped';
+  id: WorkStatus;
   label: string;
-  items: WorkItem[];
+  items: SidebarWorkItem[];
 };
 
-const sections: WorkSection[] = [
-  {
-    id: 'working',
-    label: 'Working',
-    items: [
-      { id: 1, title: 'Refactor auth flow', meta: '+34 −8', color: '#ffbd2e' },
-      { id: 2, title: 'Fix mobile layout', meta: '+12 −3', color: '#ff4f8b' },
-      { id: 3, title: 'Upgrade dependencies', meta: '+6 −14', color: '#9699a1' },
-    ],
-  },
-  {
-    id: 'ready',
-    label: 'Ready',
-    items: [
-      { id: 4, title: 'Add CSV export', meta: '12m', color: '#8b5cf6' },
-      { id: 5, title: 'Improve onboarding', meta: '1h', color: '#3395ff' },
-      { id: 6, title: 'Update pricing page', meta: '3h', color: '#29c76f' },
-    ],
-  },
-  {
-    id: 'shipped',
-    label: 'Shipped',
-    items: [
-      { id: 7, title: 'Configure CI', meta: '2h', color: '#8b5cf6' },
-      { id: 8, title: 'Add dark mode', meta: '1d', color: '#3395ff' },
-      { id: 9, title: 'Docs: getting started', meta: '3d', color: '#29c76f' },
-    ],
-  },
-];
+const SECTION_LABELS: Record<WorkStatus, string> = {
+  working: 'Working',
+  ready: 'Ready',
+  shipped: 'Shipped',
+};
+const SECTION_ORDER: WorkStatus[] = ['working', 'ready', 'shipped'];
 
 const collapsedSections = ref(new Set<WorkSection['id']>());
 
 const props = defineProps<{
   open: boolean;
   width: number;
+  projects: Project[];
+  selectedWorkItemId: string | null;
 }>();
 
 const emit = defineEmits<{
   'update:width': [value: number];
+  select: [id: string];
 }>();
 
 const isResizing = ref(false);
+
+const sections = computed<WorkSection[]>(() => {
+  const items = props.projects.flatMap((project) =>
+    project.workItems.map((item) => ({
+      ...item,
+      title: workItemTitle(item),
+      meta: workItemMeta(item),
+      color: project.color,
+      projectName: project.name,
+    })),
+  );
+
+  return SECTION_ORDER.map((status) => ({
+    id: status,
+    label: SECTION_LABELS[status],
+    items: items.filter((item) => item.status === status),
+  }));
+});
+
+function workItemTitle(item: WorkItem) {
+  if (item.branch) return item.branch;
+  if (item.worktreePath) {
+    const segments = item.worktreePath.split(/[\\/]/).filter(Boolean);
+    return segments[segments.length - 1] ?? 'Detached worktree';
+  }
+  return `Detached at ${item.headSha.slice(0, 7)}`;
+}
+
+function workItemMeta(item: WorkItem) {
+  if (item.status === 'working') {
+    if (item.additions > 0 || item.deletions > 0) {
+      return `+${item.additions} −${item.deletions}`;
+    }
+    return `${item.changedFiles} file${item.changedFiles === 1 ? '' : 's'}`;
+  }
+
+  return relativeTime(item.updatedAt);
+}
+
+function relativeTime(timestamp: number) {
+  const seconds = Math.max(0, Math.floor(Date.now() / 1000) - timestamp);
+  if (seconds < 60) return 'now';
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`;
+  return `${Math.floor(seconds / 86400)}d`;
+}
 
 function clampWidth(width: number) {
   return Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, width));
@@ -140,7 +167,10 @@ onBeforeUnmount(stopResize);
               v-for="item in section.items"
               :key="item.id"
               class="work-item"
+              :class="{ 'work-item--selected': item.id === selectedWorkItemId }"
               type="button"
+              :title="`${item.projectName} · ${item.lastCommitSubject || item.title}`"
+              @click="emit('select', item.id)"
             >
               <span class="work-item__dot" :style="{ background: item.color }"></span>
               <span class="work-item__title">{{ item.title }}</span>
@@ -300,6 +330,10 @@ onBeforeUnmount(stopResize);
 }
 
 .work-item:hover {
+  background: var(--surface-hover);
+}
+
+.work-item--selected {
   background: var(--surface-hover);
 }
 

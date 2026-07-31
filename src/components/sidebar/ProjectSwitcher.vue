@@ -1,25 +1,22 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import type { Project } from '../../types/projects';
 
-type Project = {
-  id: number;
-  name: string;
-  color: string;
-};
+const props = defineProps<{
+  projects: Project[];
+  loading: boolean;
+  error: string | null;
+}>();
 
-const projects = ref<Project[]>([
-  { id: 1, name: 'Shipyard', color: '#8b5cf6' },
-  { id: 2, name: 'Rashun', color: '#3395ff' },
-  { id: 3, name: 'HomeStagedIT', color: '#29c76f' },
-  { id: 4, name: 'Portfolio', color: '#ffbd2e' },
-  { id: 5, name: 'Website', color: '#ff4f8b' },
-  { id: 6, name: 'Experiments', color: '#9699a1' },
-]);
+const emit = defineEmits<{
+  add: [];
+  remove: [id: string];
+}>();
 
 const root = ref<HTMLElement>();
 const open = ref(false);
 const projectLabel = computed(
-  () => `${projects.value.length} Project${projects.value.length === 1 ? '' : 's'}`,
+  () => `${props.projects.length} Project${props.projects.length === 1 ? '' : 's'}`,
 );
 
 function closeMenuOnOutsideClick(event: PointerEvent) {
@@ -28,10 +25,6 @@ function closeMenuOnOutsideClick(event: PointerEvent) {
 
 function closeMenuOnEscape(event: KeyboardEvent) {
   if (event.key === 'Escape') open.value = false;
-}
-
-function closeProject(id: number) {
-  projects.value = projects.value.filter((project) => project.id !== id);
 }
 
 onMounted(() => {
@@ -62,6 +55,8 @@ onBeforeUnmount(() => {
 
     <Transition name="project-menu">
       <div v-if="open" id="project-menu" class="project-menu">
+        <p v-if="error" class="project-menu__error">{{ error }}</p>
+
         <div class="project-menu__list">
           <div
             v-for="project in projects"
@@ -78,7 +73,7 @@ onBeforeUnmount(() => {
               type="button"
               :aria-label="`Close ${project.name}`"
               :title="`Close ${project.name}`"
-              @click="closeProject(project.id)"
+              @click="emit('remove', project.id)"
             >
               <svg viewBox="0 0 16 16" aria-hidden="true">
                 <path d="m4 4 8 8m0-8-8 8" />
@@ -87,11 +82,16 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <button class="project-menu__add" type="button">
+        <button
+          class="project-menu__add"
+          type="button"
+          :disabled="loading"
+          @click="emit('add')"
+        >
           <svg viewBox="0 0 16 16" aria-hidden="true">
             <path d="M8 2.75v10.5M2.75 8h10.5" />
           </svg>
-          <span>Add project</span>
+          <span>{{ loading ? 'Scanning…' : 'Add project' }}</span>
         </button>
       </div>
     </Transition>
@@ -155,6 +155,15 @@ onBeforeUnmount(() => {
 
 .project-menu__list {
   padding: 7px;
+}
+
+.project-menu__error {
+  margin: 0;
+  padding: 10px 14px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #ff9b9b;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .project-menu__row {
@@ -237,6 +246,10 @@ onBeforeUnmount(() => {
 
 .project-menu__add:hover {
   background: var(--surface-hover);
+}
+
+.project-menu__add:disabled {
+  color: var(--text-secondary);
 }
 
 .project-menu-enter-active,

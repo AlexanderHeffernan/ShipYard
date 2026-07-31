@@ -1,10 +1,15 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { onMounted, ref } from 'vue';
 import AppSidebar from './components/sidebar/AppSidebar.vue';
 import ProjectSwitcher from './components/sidebar/ProjectSwitcher.vue';
+import { useProjects } from './composables/useProjects';
 
 const sidebarOpen = ref(true);
 const sidebarWidth = ref(288);
+const selectedWorkItemId = ref<string | null>(null);
+const { projects, loading, error, loadProjects, addProject, removeProject } = useProjects();
+
+onMounted(loadProjects);
 </script>
 
 <template>
@@ -25,12 +30,21 @@ const sidebarWidth = ref(288);
         </svg>
       </button>
 
-      <ProjectSwitcher />
+      <ProjectSwitcher
+        :projects="projects"
+        :loading="loading"
+        :error="error"
+        @add="addProject"
+        @remove="removeProject"
+      />
     </div>
 
     <AppSidebar
       :open="sidebarOpen"
       v-model:width="sidebarWidth"
+      :projects="projects"
+      :selected-work-item-id="selectedWorkItemId"
+      @select="selectedWorkItemId = $event"
     />
 
     <main class="app-content"></main>
