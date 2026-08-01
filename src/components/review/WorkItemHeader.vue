@@ -45,13 +45,14 @@ const statusClass = computed(() => props.workItem.pullRequest ? `status-pill--${
         <AppButton
           class="work-header__settings"
           variant="ghost"
-          size="icon"
+          size="small"
           type="button"
           :aria-label="`Project settings for ${project.name}`"
           :title="`Project settings — ${project.name}`"
           @click="emit('settings', 'run')"
         >
           <Settings aria-hidden="true" />
+          <span>Project Settings</span>
         </AppButton>
       </div>
     </div>
@@ -168,7 +169,6 @@ const statusClass = computed(() => props.workItem.pullRequest ? `status-pill--${
 }
 
 .work-header__settings {
-  width: 24px;
   height: 24px;
 }
 

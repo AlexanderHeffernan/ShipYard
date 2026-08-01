@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ExternalLink, Play, Plus, TerminalSquare, Trash2, X } from '@lucide/vue';
-import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue';
+import { ExternalLink, Play, Plus, TerminalSquare, Trash2 } from '@lucide/vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import AppButton from '../ui/AppButton.vue';
 import OpenSettingsSection from './OpenSettingsSection.vue';
+import SettingsModal from './SettingsModal.vue';
 import type { Project } from '../../types/projects';
 import type { RunScript, ScriptInput } from '../../types/run';
 import { useRunScripts } from '../../composables/useRunScripts';
@@ -15,8 +16,12 @@ const runScripts = useRunScripts();
 const activeSection = ref<'open' | 'run'>(props.initialSection);
 const selectedId = ref<string | null>(null);
 const draft = ref<ScriptInput>(newDraft());
+const adding = ref(false);
 const saving = ref(false);
+const deleting = ref(false);
+const saved = ref(false);
 const error = ref<string | null>(null);
+let savedFeedbackTimer: number | undefined;
 const scriptStore = computed(() => runScripts);
 const settings = computed(() => scriptStore.value.settingsByProject.value[props.project.id]);
 const scripts = computed(() => settings.value?.scripts ?? []);
@@ -60,11 +65,12 @@ function selectScript(script: RunScript) {
     content: script.content,
     makeDefault: settings.value?.defaultScriptId === script.id,
   };
+  saved.value = false;
   error.value = null;
 }
 
 async function addScript() {
-  saving.value = true;
+  adding.value = true;
   error.value = null;
   const input = {
     ...newDraft(),
@@ -78,17 +84,21 @@ async function addScript() {
   } catch (saveError) {
     error.value = String(saveError);
   } finally {
-    saving.value = false;
+    adding.value = false;
   }
 }
 
 async function saveDraft() {
   saving.value = true;
+  saved.value = false;
   error.value = null;
   try {
     const updated = await scriptStore.value.save(props.project.id, draft.value);
     const selected = updated.scripts.find((script) => script.id === draft.value.id);
     if (selected) selectScript(selected);
+    saved.value = true;
+    window.clearTimeout(savedFeedbackTimer);
+    savedFeedbackTimer = window.setTimeout(() => (saved.value = false), 1600);
   } catch (saveError) {
     error.value = String(saveError);
   } finally {
@@ -98,6 +108,7 @@ async function saveDraft() {
 
 async function deleteSelected() {
   if (!selectedId.value || !window.confirm(`Delete “${draft.value.label}”?`)) return;
+  deleting.value = true;
   try {
     const updated = await scriptStore.value.remove(props.project.id, selectedId.value);
     selectedId.value = null;
@@ -105,51 +116,40 @@ async function deleteSelected() {
     if (next) selectScript(next);
   } catch (deleteError) {
     error.value = String(deleteError);
+  } finally {
+    deleting.value = false;
   }
 }
 
-function onKeydown(event: KeyboardEvent) {
-  if (event.key === 'Escape') emit('close');
-}
-
-onMounted(() => {
-  document.addEventListener('keydown', onKeydown);
-});
-onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown));
+onBeforeUnmount(() => window.clearTimeout(savedFeedbackTimer));
 </script>
 
 <template>
-  <div class="settings-backdrop" @mousedown.self="emit('close')">
-    <section class="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
-      <header class="settings-header">
-        <div>
-          <h2 id="settings-title">Project Settings</h2>
-          <span>{{ project.name }}</span>
-        </div>
-        <AppButton variant="ghost" size="icon" type="button" aria-label="Close settings" @click="emit('close')">
-          <X aria-hidden="true" />
-        </AppButton>
-      </header>
+  <SettingsModal
+    title="Project Settings"
+    :subtitle="`${project.name} · Only applies to this project.`"
+    size="large"
+    navigation-label="Project settings"
+    @close="emit('close')"
+  >
+    <template #navigation>
+      <button :aria-current="activeSection === 'open' ? 'page' : undefined" type="button" @click="activeSection = 'open'">
+        <ExternalLink aria-hidden="true" />
+        Open
+      </button>
+      <button :aria-current="activeSection === 'run' ? 'page' : undefined" type="button" @click="activeSection = 'run'">
+        <Play aria-hidden="true" />
+        Run
+      </button>
+    </template>
 
-      <div class="settings-layout">
-        <nav class="settings-nav" aria-label="Project settings">
-          <button :class="{ 'settings-nav__active': activeSection === 'open' }" type="button" @click="activeSection = 'open'">
-            <ExternalLink aria-hidden="true" />
-            Open
-          </button>
-          <button :class="{ 'settings-nav__active': activeSection === 'run' }" type="button" @click="activeSection = 'run'">
-            <Play aria-hidden="true" />
-            Run
-          </button>
-        </nav>
-
-        <main v-if="activeSection !== 'open'" class="run-settings">
+    <main v-if="activeSection !== 'open'" class="run-settings">
           <div class="run-settings__heading">
             <div>
               <h3>{{ actionName }} scripts</h3>
               <p>Commands available from this project’s {{ actionName }} button.</p>
             </div>
-            <AppButton v-if="scripts.length > 0" type="button" :disabled="saving" @click="addScript">
+            <AppButton v-if="scripts.length > 0" type="button" :loading="adding" loading-label="Adding" @click="addScript">
               <Plus aria-hidden="true" />
               Add script
             </AppButton>
@@ -161,9 +161,9 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown));
             <span class="run-settings__empty-icon"><TerminalSquare aria-hidden="true" /></span>
             <h4>No {{ actionName.toLowerCase() }} scripts yet</h4>
             <p>Add a script to {{ actionName.toLowerCase() }} this project without leaving Shipyard.</p>
-            <AppButton variant="primary" type="button" :disabled="saving" @click="addScript">
+            <AppButton variant="primary" type="button" :loading="adding" loading-label="Adding" @click="addScript">
               <Plus aria-hidden="true" />
-              {{ saving ? 'Adding…' : 'Add script' }}
+              Add script
             </AppButton>
             <p v-if="error" class="script-editor__error">{{ error }}</p>
           </div>
@@ -200,35 +200,24 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown));
               </p>
               <p v-if="error" class="script-editor__error">{{ error }}</p>
               <div class="script-editor__actions">
-                <AppButton v-if="selectedId" variant="danger" type="button" @click="deleteSelected">
+                <AppButton v-if="selectedId" variant="danger" type="button" :loading="deleting" loading-label="Deleting" @click="deleteSelected">
                   <Trash2 aria-hidden="true" />
                   Delete
                 </AppButton>
                 <span></span>
-                <AppButton variant="primary" type="submit" :disabled="saving">
-                  {{ saving ? 'Saving…' : 'Save script' }}
+                <AppButton variant="primary" type="submit" :loading="saving" loading-label="Saving" :success="saved" success-label="Saved">
+                  Save script
                 </AppButton>
               </div>
             </form>
           </div>
-        </main>
-        <OpenSettingsSection v-else />
-      </div>
-    </section>
-  </div>
+    </main>
+    <OpenSettingsSection v-else />
+  </SettingsModal>
 </template>
 
 <style scoped>
-.settings-backdrop { position: fixed; z-index: 20; inset: 0; display: grid; padding: 32px; place-items: center; background: rgba(0, 0, 0, 0.52); backdrop-filter: blur(5px); }
-.settings-modal { display: flex; width: min(820px, 90vw); height: min(570px, 84vh); flex-direction: column; overflow: hidden; background: #15161b; border: 1px solid rgba(255,255,255,.14); border-radius: 12px; box-shadow: 0 24px 80px rgba(0,0,0,.55); }
-.settings-header { display: flex; flex: 0 0 58px; align-items: center; justify-content: space-between; padding: 0 15px 0 20px; border-bottom: 1px solid var(--border-subtle); }
-.settings-header h2, .run-settings h3 { margin: 0; font-size: 14px; font-weight: 550; }
-.settings-header span { display: block; margin-top: 3px; font-size: 11px; color: var(--text-secondary); }
-.settings-layout { display: flex; min-height: 0; flex: 1; }
-.settings-nav { flex: 0 0 160px; padding: 12px 9px; background: rgba(255,255,255,.018); border-right: 1px solid var(--border-subtle); }
-.settings-nav button { display: flex; align-items: center; gap: 9px; width: 100%; height: 34px; padding: 0 10px; font: inherit; font-size: 12px; color: var(--text-secondary); background: transparent; border: 0; border-radius: 6px; }
-.settings-nav button:hover, .settings-nav__active { color: var(--text-primary) !important; background: var(--surface-hover) !important; }
-.settings-nav svg { width: 13px; height: 13px; stroke-width: 1.7; }
+.run-settings h3 { margin: 0; font-size: 14px; font-weight: 550; }
 .run-settings { display: flex; min-width: 0; flex: 1; flex-direction: column; padding: 22px; }
 .run-settings__heading { display: flex; flex: 0 0 auto; align-items: start; justify-content: space-between; margin-bottom: 18px; }
 .run-settings__heading p { margin: 5px 0 0; font-size: 11px; color: var(--text-secondary); }

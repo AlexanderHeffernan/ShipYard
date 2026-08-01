@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { Settings } from '@lucide/vue';
 import { computed, onBeforeUnmount, ref } from 'vue';
+import AppButton from '../ui/AppButton.vue';
 import type { Project, WorkItem } from '../../types/projects';
 import { workItemMeta, workItemTitle } from '../../utils/workItems';
 
@@ -31,6 +33,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   'update:width': [value: number];
   select: [id: string];
+  settings: [];
 }>();
 
 const isResizing = ref(false);
@@ -156,6 +159,18 @@ onBeforeUnmount(stopResize);
           </div>
         </section>
       </nav>
+      <footer class="sidebar__footer">
+        <AppButton
+          variant="ghost"
+          block
+          type="button"
+          title="Settings for ShipYard across all projects"
+          @click="emit('settings')"
+        >
+          <Settings aria-hidden="true" />
+          ShipYard Settings
+        </AppButton>
+      </footer>
     </div>
 
     <div
@@ -200,17 +215,32 @@ onBeforeUnmount(stopResize);
 }
 
 .sidebar__body {
+  display: flex;
   height: 100%;
   padding-top: var(--titlebar-height);
+  flex-direction: column;
   overflow: hidden;
 }
 
 .sidebar__content {
-  height: 100%;
-  padding: 0 12px 24px;
+  min-height: 0;
+  flex: 1;
+  padding: 0 12px 12px;
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+
+.sidebar__footer {
+  flex: 0 0 auto;
+  padding: 9px 12px 12px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.sidebar__footer :deep(.app-button) {
+  justify-content: flex-start;
+  height: 30px;
+  padding: 0 8px;
 }
 
 .work-section + .work-section {

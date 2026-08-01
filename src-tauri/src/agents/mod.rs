@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -10,17 +10,13 @@ use std::{
 pub(crate) enum AgentKind {
     Amp,
     Codex,
-    Custom,
 }
 
 #[derive(Clone, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct AgentSettings {
+    #[serde(default, deserialize_with = "deserialize_preferred_agent")]
     pub(crate) preferred_agent: Option<AgentKind>,
-    #[serde(default)]
-    pub(crate) custom_name: String,
-    #[serde(default)]
-    pub(crate) custom_command: String,
 }
 
 #[derive(Serialize)]
@@ -52,18 +48,11 @@ struct BuiltInAdapter {
     path: PathBuf,
 }
 
-struct CustomAdapter {
-    label: String,
-    path: PathBuf,
-    args: Vec<String>,
-}
-
 impl AgentAdapter for BuiltInAdapter {
     fn label(&self) -> &str {
         match self.kind {
             AgentKind::Amp => "Amp",
             AgentKind::Codex => "Codex",
-            AgentKind::Custom => unreachable!(),
         }
     }
 
@@ -83,7 +72,6 @@ impl AgentAdapter for BuiltInAdapter {
                 "never".into(),
                 "-".into(),
             ],
-            AgentKind::Custom => unreachable!(),
         }
     }
 
@@ -99,57 +87,22 @@ impl AgentAdapter for BuiltInAdapter {
                 "never".into(),
                 "-".into(),
             ],
-            AgentKind::Custom => unreachable!(),
         }
-    }
-}
-
-impl AgentAdapter for CustomAdapter {
-    fn label(&self) -> &str {
-        &self.label
-    }
-    fn executable(&self) -> &Path {
-        &self.path
-    }
-    fn metadata_args(&self) -> Vec<String> {
-        self.args.clone()
-    }
-    fn conflict_args(&self) -> Vec<String> {
-        self.args.clone()
     }
 }
 
 pub(crate) fn configuration(base: &Path) -> Result<AgentConfiguration, String> {
     let settings = read_settings(base)?;
-    let custom_path = custom_parts(&settings.custom_command).map(|(path, _)| path);
     Ok(AgentConfiguration {
         agents: vec![
             detected(AgentKind::Amp, "Amp", "amp"),
             detected(AgentKind::Codex, "Codex", "codex"),
-            AgentInfo {
-                kind: AgentKind::Custom,
-                label: if settings.custom_name.trim().is_empty() {
-                    "Custom".into()
-                } else {
-                    settings.custom_name.clone()
-                },
-                available: custom_path.as_ref().is_some_and(|path| path.is_file()),
-                executable: custom_path.map(|path| path.to_string_lossy().into_owned()),
-                version: None,
-            },
         ],
         settings,
     })
 }
 
 pub(crate) fn save(base: &Path, settings: AgentSettings) -> Result<AgentConfiguration, String> {
-    if settings.preferred_agent == Some(AgentKind::Custom) {
-        let (path, _) = custom_parts(&settings.custom_command)
-            .ok_or_else(|| "Custom agent command is required".to_owned())?;
-        if !path.is_file() {
-            return Err("Custom agent executable does not exist".to_owned());
-        }
-    }
     let path = settings_path(base);
     fs::create_dir_all(path.parent().unwrap()).map_err(|error| error.to_string())?;
     let content = serde_json::to_vec_pretty(&settings).map_err(|error| error.to_string())?;
@@ -164,19 +117,6 @@ pub(crate) fn selected(base: &Path) -> Result<Box<dyn AgentAdapter + Send>, Stri
     match settings.preferred_agent {
         Some(AgentKind::Amp) => built_in(AgentKind::Amp, "amp"),
         Some(AgentKind::Codex) => built_in(AgentKind::Codex, "codex"),
-        Some(AgentKind::Custom) => {
-            let (path, args) = custom_parts(&settings.custom_command)
-                .ok_or_else(|| "Custom agent command is not configured".to_owned())?;
-            Ok(Box::new(CustomAdapter {
-                label: if settings.custom_name.trim().is_empty() {
-                    "Custom agent".into()
-                } else {
-                    settings.custom_name
-                },
-                path,
-                args,
-            }))
-        }
         None => Err("Choose a coding agent in ShipYard Settings before shipping".to_owned()),
     }
 }
@@ -233,13 +173,16 @@ fn executable(name: &str) -> Option<PathBuf> {
         .filter(|path| path.is_file())
 }
 
-fn custom_parts(command: &str) -> Option<(PathBuf, Vec<String>)> {
-    let parts = command
-        .split_whitespace()
-        .map(str::to_owned)
-        .collect::<Vec<_>>();
-    let (path, args) = parts.split_first()?;
-    Some((PathBuf::from(path), args.to_vec()))
+fn deserialize_preferred_agent<'de, D>(deserializer: D) -> Result<Option<AgentKind>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Option::<String>::deserialize(deserializer)?;
+    Ok(match value.as_deref() {
+        Some("amp") => Some(AgentKind::Amp),
+        Some("codex") => Some(AgentKind::Codex),
+        _ => None,
+    })
 }
 
 fn read_settings(base: &Path) -> Result<AgentSettings, String> {
@@ -253,4 +196,18 @@ fn read_settings(base: &Path) -> Result<AgentSettings, String> {
 
 fn settings_path(base: &Path) -> PathBuf {
     base.join("agents").join("settings.json")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AgentSettings;
+
+    #[test]
+    fn ignores_previously_configured_custom_agent() {
+        let settings: AgentSettings = serde_json::from_str(
+            r#"{"preferredAgent":"custom","customName":"Old","customCommand":"/tmp/agent"}"#,
+        )
+        .unwrap();
+        assert!(settings.preferred_agent.is_none());
+    }
 }

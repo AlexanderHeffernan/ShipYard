@@ -6,12 +6,10 @@ export type GitHubStatus = {
   error: string | null;
 };
 
-export type AgentKind = 'amp' | 'codex' | 'custom';
+export type AgentKind = 'amp' | 'codex';
 
 export type AgentSettings = {
   preferredAgent: AgentKind | null;
-  customName: string;
-  customCommand: string;
 };
 
 export type AgentInfo = {

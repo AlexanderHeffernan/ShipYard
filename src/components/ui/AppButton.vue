@@ -4,11 +4,19 @@ withDefaults(
     variant?: 'default' | 'ghost' | 'primary' | 'danger';
     size?: 'small' | 'medium' | 'icon';
     block?: boolean;
+    disabled?: boolean;
+    loading?: boolean;
+    loadingLabel?: string;
+    success?: boolean;
+    successLabel?: string;
   }>(),
   {
     variant: 'default',
     size: 'medium',
     block: false,
+    disabled: false,
+    loading: false,
+    success: false,
   },
 );
 </script>
@@ -16,9 +24,23 @@ withDefaults(
 <template>
   <button
     class="app-button"
-    :class="[`app-button--${variant}`, `app-button--${size}`, { 'app-button--block': block }]"
+    :class="[
+      `app-button--${variant}`,
+      `app-button--${size}`,
+      { 'app-button--block': block, 'app-button--success': success },
+    ]"
+    :disabled="disabled || loading"
+    :aria-busy="loading || undefined"
   >
-    <slot />
+    <svg v-if="loading" class="app-button__spinner" viewBox="0 0 16 16" aria-hidden="true">
+      <circle cx="8" cy="8" r="5.5" />
+    </svg>
+    <svg v-else-if="success" class="app-button__check" viewBox="0 0 16 16" aria-hidden="true">
+      <path d="m3.5 8.25 3 3 6-6.5" />
+    </svg>
+    <span v-if="loading && loadingLabel">{{ loadingLabel }}</span>
+    <span v-else-if="success && successLabel">{{ successLabel }}</span>
+    <slot v-else />
   </button>
 </template>
 
@@ -104,10 +126,34 @@ withDefaults(
   background: rgba(255, 100, 100, 0.1);
 }
 
+.app-button--success {
+  color: #9ae3b5;
+  border-color: rgba(100, 207, 140, 0.32);
+}
+
 .app-button :deep(svg) {
   width: 14px;
   height: 14px;
   flex: 0 0 auto;
   stroke-width: 1.7;
+}
+
+.app-button .app-button__spinner {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-dasharray: 24 12;
+  animation: app-button-spin 700ms linear infinite;
+}
+
+.app-button .app-button__check {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+@keyframes app-button-spin {
+  to { transform: rotate(360deg); }
 }
 </style>

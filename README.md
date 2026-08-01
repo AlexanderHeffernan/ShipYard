@@ -14,7 +14,6 @@ ShipYard currently detects and supports:
 
 - [Amp](https://ampcode.com/)
 - [Codex](https://github.com/openai/codex)
-- A custom executable that accepts instructions on standard input
 - GitHub through an authenticated [GitHub CLI](https://cli.github.com/) installation
 
 Choose one preferred coding agent in the global ShipYard Settings modal. Agent use is automatic after selection.

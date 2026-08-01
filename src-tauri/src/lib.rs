@@ -9,25 +9,30 @@ mod watch;
 use tauri::Manager;
 
 #[tauri::command]
-fn get_agent_configuration(app: tauri::AppHandle) -> Result<agents::AgentConfiguration, String> {
-    agents::configuration(
-        &app.path()
-            .app_data_dir()
-            .map_err(|error| error.to_string())?,
-    )
+async fn get_agent_configuration(
+    app: tauri::AppHandle,
+) -> Result<agents::AgentConfiguration, String> {
+    let base = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| error.to_string())?;
+    tauri::async_runtime::spawn_blocking(move || agents::configuration(&base))
+        .await
+        .map_err(|error| format!("agent detection failed: {error}"))?
 }
 
 #[tauri::command]
-fn save_agent_settings(
+async fn save_agent_settings(
     app: tauri::AppHandle,
     settings: agents::AgentSettings,
 ) -> Result<agents::AgentConfiguration, String> {
-    agents::save(
-        &app.path()
-            .app_data_dir()
-            .map_err(|error| error.to_string())?,
-        settings,
-    )
+    let base = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| error.to_string())?;
+    tauri::async_runtime::spawn_blocking(move || agents::save(&base, settings))
+        .await
+        .map_err(|error| format!("agent settings save failed: {error}"))?
 }
 
 #[tauri::command]
@@ -43,8 +48,10 @@ async fn scan_project(path: String) -> Result<git::Project, String> {
 }
 
 #[tauri::command]
-fn get_github_status() -> github::GitHubStatus {
-    github::status()
+async fn get_github_status() -> Result<github::GitHubStatus, String> {
+    tauri::async_runtime::spawn_blocking(github::status)
+        .await
+        .map_err(|error| format!("GitHub status check failed: {error}"))
 }
 
 #[tauri::command]

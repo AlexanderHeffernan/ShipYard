@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { openUrl } from '@tauri-apps/plugin-opener';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRunner } from '../../composables/useRunner';
 import type { Project, WorkItem } from '../../types/projects';
@@ -56,16 +55,15 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeMenu));
 
 <template>
   <div ref="root" class="ship-control">
-    <button class="ship-control__main" type="button" :disabled="anotherRunActive || blocked || unavailable" :title="unavailable ? 'Local shipping requires a checked-out branch connected to GitHub' : primaryLabel" @click="primary">
+    <button class="ship-control__main" :class="{ 'ship-control__main--single': workItem.pullRequest }" type="button" :disabled="anotherRunActive || blocked || unavailable" :title="unavailable ? 'Local shipping requires a checked-out branch connected to GitHub' : primaryLabel" @click="primary">
       <svg viewBox="0 0 16 16" aria-hidden="true"><path v-if="active" d="M4.5 4.5h7v7h-7z"/><path v-else d="M2.5 9.5h11l-2 3h-7l-2-3Zm3-1V3.5l5 2.5-5 2.5Z"/></svg>
       <span>{{ primaryLabel }}</span>
     </button>
-    <button class="ship-control__menu-button" type="button" aria-label="More shipping options" :aria-expanded="menuOpen" :disabled="anotherRunActive || unavailable" @click="menuOpen = !menuOpen">
+    <button v-if="!workItem.pullRequest" class="ship-control__menu-button" type="button" aria-label="More shipping options" :aria-expanded="menuOpen" :disabled="anotherRunActive || unavailable" @click="menuOpen = !menuOpen">
       <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4.5 6 3.5 3.5L11.5 6"/></svg>
     </button>
-    <div v-if="menuOpen" class="ship-menu">
-      <button v-if="workItem.pullRequest" type="button" @click="openUrl(workItem.pullRequest.url); menuOpen = false">Open PR on GitHub</button>
-      <button v-else type="button" @click="directToMain">Ship directly to {{ project.defaultBranch }}</button>
+    <div v-if="menuOpen && !workItem.pullRequest" class="ship-menu">
+      <button type="button" @click="directToMain">Ship directly to {{ project.defaultBranch }}</button>
       <p v-if="error">{{ error }}</p>
     </div>
   </div>
@@ -78,6 +76,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeMenu));
 .ship-control > button:disabled { opacity: .45; }
 .ship-control svg { width: 13px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.35; }
 .ship-control__main { max-width: 140px; border-radius: 6px 0 0 6px; }
+.ship-control__main--single { border-radius: 6px; }
 .ship-control__menu-button { width: 22px; justify-content: center; padding: 0 !important; margin-left: -1px; border-radius: 0 6px 6px 0; }
 .ship-control__menu-button svg { width: 10px; }
 .ship-menu { position: absolute; z-index: 7; top: 29px; right: 0; width: 210px; padding: 5px; background: #17181d; border: 1px solid rgba(255,255,255,.13); border-radius: 8px; box-shadow: 0 12px 32px rgba(0,0,0,.46); }

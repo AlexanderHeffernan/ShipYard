@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { Settings } from '@lucide/vue';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import AppSettingsModal from './components/settings/AppSettingsModal.vue';
 import WorkItemPanel from './components/review/WorkItemPanel.vue';
@@ -77,15 +76,6 @@ function openProjectSettings(projectId: string) {
         @remove="removeProject"
         @settings="openProjectSettings"
       />
-      <button
-        class="app-settings-button"
-        type="button"
-        aria-label="ShipYard settings"
-        title="ShipYard settings"
-        @click="appSettingsOpen = true"
-      >
-        <Settings aria-hidden="true" />
-      </button>
     </div>
 
     <AppSidebar
@@ -94,6 +84,7 @@ function openProjectSettings(projectId: string) {
       :projects="projects"
       :selected-work-item-id="selectedWorkItemId"
       @select="selectedWorkItemId = $event"
+      @settings="appSettingsOpen = true"
     />
 
     <main class="app-content">
@@ -160,28 +151,6 @@ function openProjectSettings(projectId: string) {
   background: transparent;
   border: 0;
   border-radius: 7px;
-}
-
-.app-settings-button {
-  display: grid;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  place-items: center;
-  color: var(--text-secondary);
-  background: transparent;
-  border: 0;
-  border-radius: 7px;
-}
-
-.app-settings-button:hover {
-  color: var(--text-primary);
-  background: var(--surface-hover);
-}
-
-.app-settings-button svg {
-  width: 14px;
-  height: 14px;
 }
 
 .sidebar-toggle:hover {

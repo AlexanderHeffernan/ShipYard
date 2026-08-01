@@ -34,6 +34,15 @@ pub(crate) struct PreparedShipping {
 }
 
 pub(crate) fn prepare(base: &Path, request: ShippingRequest) -> Result<PreparedShipping, String> {
+    let adapter = agents::selected(base)?;
+    prepare_with_adapter(base, request, adapter.as_ref())
+}
+
+fn prepare_with_adapter(
+    base: &Path,
+    request: ShippingRequest,
+    adapter: &dyn agents::AgentAdapter,
+) -> Result<PreparedShipping, String> {
     let source = git::validate_worktree(&request.project_id, &request.source_path)?;
     let branch = request
         .source_branch
@@ -45,7 +54,6 @@ pub(crate) fn prepare(base: &Path, request: ShippingRequest) -> Result<PreparedS
     if request.github_repository.split('/').count() != 2 {
         return Err("This project is not connected to a GitHub repository".to_owned());
     }
-    let adapter = agents::selected(base)?;
     let operation_id = format!(
         "shipping-{}",
         SystemTime::now()
@@ -66,7 +74,7 @@ pub(crate) fn prepare(base: &Path, request: ShippingRequest) -> Result<PreparedS
     let resolution_path = base.join("resolutions").join(&operation_id);
     let script = script(
         &request,
-        adapter.as_ref(),
+        adapter,
         &operation_dir,
         &metadata_prompt,
         &conflict_prompt,
@@ -300,17 +308,39 @@ fn shell_text(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{prepare, ShippingAction, ShippingRequest};
-    use crate::agents::{self, AgentKind, AgentSettings};
+    use super::{prepare_with_adapter, ShippingAction, ShippingRequest};
+    use crate::agents::AgentAdapter;
     use std::{
         fs,
-        path::Path,
+        path::{Path, PathBuf},
         process::Command,
         time::{SystemTime, UNIX_EPOCH},
     };
 
+    struct TestAdapter {
+        executable: PathBuf,
+    }
+
+    impl AgentAdapter for TestAdapter {
+        fn label(&self) -> &str {
+            "Test agent"
+        }
+
+        fn executable(&self) -> &Path {
+            &self.executable
+        }
+
+        fn metadata_args(&self) -> Vec<String> {
+            Vec::new()
+        }
+
+        fn conflict_args(&self) -> Vec<String> {
+            Vec::new()
+        }
+    }
+
     #[test]
-    fn direct_shipping_commits_and_resolves_a_changed_base_with_the_custom_adapter() {
+    fn direct_shipping_commits_and_resolves_a_changed_base_with_an_adapter() {
         let root = temporary("pipeline");
         let remote = root.join("remote.git");
         let checkout = root.join("checkout");
@@ -361,21 +391,13 @@ fi
             use std::os::unix::fs::PermissionsExt;
             fs::set_permissions(&agent, fs::Permissions::from_mode(0o700)).unwrap();
         }
-        agents::save(
-            &data,
-            AgentSettings {
-                preferred_agent: Some(AgentKind::Custom),
-                custom_name: "Test agent".into(),
-                custom_command: agent.to_string_lossy().into_owned(),
-            },
-        )
-        .unwrap();
+        let adapter = TestAdapter { executable: agent };
         let project_id = crate::git::resolve(checkout.to_str().unwrap())
             .unwrap()
             .1
             .to_string_lossy()
             .into_owned();
-        let prepared = prepare(
+        let prepared = prepare_with_adapter(
             &data,
             ShippingRequest {
                 project_id,
@@ -387,6 +409,7 @@ fi
                 action: ShippingAction::DirectToMain,
                 pull_request_number: None,
             },
+            &adapter,
         )
         .unwrap();
         let previous_main = text(&checkout, &["rev-parse", "origin/main"]);

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { openUrl } from '@tauri-apps/plugin-opener';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useOpenApplications } from '../../composables/useOpenApplications';
 import type { Project, WorkItem } from '../../types/projects';
@@ -44,6 +45,18 @@ async function openWith(application: OpenApplication) {
   }
 }
 
+async function openPullRequest() {
+  const url = props.workItem.pullRequest?.url;
+  if (!url) return;
+  error.value = null;
+  try {
+    await openUrl(url);
+    menuOpen.value = false;
+  } catch (openError) {
+    error.value = String(openError);
+  }
+}
+
 function closeMenu(event: PointerEvent) {
   if (!root.value?.contains(event.target as Node)) menuOpen.value = false;
 }
@@ -78,6 +91,10 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeMenu));
     </button>
 
     <div v-if="menuOpen" class="open-menu">
+      <button v-if="workItem.pullRequest" type="button" @click="openPullRequest">
+        <span>Open PR on GitHub</span>
+        <small>#{{ workItem.pullRequest.number }}</small>
+      </button>
       <p v-if="!checkoutPath" class="open-menu__notice">
         This branch needs to be checked out before it can be opened.
       </p>
