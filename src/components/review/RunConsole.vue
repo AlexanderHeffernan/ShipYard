@@ -12,6 +12,10 @@ import { useRunner } from '../../composables/useRunner';
 const MIN_HEIGHT = 120;
 const DEFAULT_HEIGHT = 220;
 
+function themeToken(name: string) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
 const props = defineProps<{ projectId: string }>();
 const { currentRun, cancel, sendInput, resize, clear } = useRunner();
 const terminalHost = ref<HTMLElement>();
@@ -40,9 +44,9 @@ function mountTerminal() {
     scrollback: 10_000,
     theme: {
       background: 'rgba(0, 0, 0, 0)',
-      foreground: '#c5c8d0',
-      cursor: '#c5c8d0',
-      selectionBackground: '#3a4966',
+      foreground: themeToken('--text-primary'),
+      cursor: themeToken('--primary'),
+      selectionBackground: themeToken('--primary-subtle'),
     },
   });
   fitAddon = new FitAddon();
@@ -273,7 +277,7 @@ onBeforeUnmount(() => {
 .run-console__status {
   width: 7px;
   height: 7px;
-  background: #e7b950;
+  background: var(--warning);
   border-radius: 50%;
 }
 
@@ -282,13 +286,13 @@ onBeforeUnmount(() => {
 }
 
 .run-console__status--succeeded {
-  background: #64cf8c;
+  background: var(--success);
 }
 
 .run-console__status--failed,
 .run-console__status--cancelled,
 .run-console__status--stopping {
-  background: #ff7777;
+  background: var(--danger);
 }
 
 .run-console__body {
@@ -309,7 +313,7 @@ onBeforeUnmount(() => {
   top: 11px;
   left: 13px;
   font: 11px/1.35 SFMono-Regular, Menlo, Monaco, monospace;
-  color: rgba(255, 255, 255, 0.36);
+  color: var(--text-muted);
   pointer-events: none;
 }
 

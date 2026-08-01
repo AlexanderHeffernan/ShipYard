@@ -117,7 +117,7 @@ pub(crate) fn selected(base: &Path) -> Result<Box<dyn AgentAdapter + Send>, Stri
     match settings.preferred_agent {
         Some(AgentKind::Amp) => built_in(AgentKind::Amp, "amp"),
         Some(AgentKind::Codex) => built_in(AgentKind::Codex, "codex"),
-        None => Err("Choose a coding agent in ShipYard Settings before shipping".to_owned()),
+        None => Err("Choose a coding agent in Shipyard Settings before shipping".to_owned()),
     }
 }
 

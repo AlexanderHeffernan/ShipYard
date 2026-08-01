@@ -61,7 +61,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown));
   display: grid;
   padding: 32px;
   place-items: center;
-  background: rgba(0, 0, 0, 0.55);
+  background: var(--surface-scrim);
   backdrop-filter: blur(5px);
 }
 
@@ -71,10 +71,10 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown));
   height: min(500px, 82vh);
   flex-direction: column;
   overflow: hidden;
-  background: #15161b;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: var(--surface-elevated);
+  border: 1px solid var(--border-strong);
   border-radius: 12px;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
+  box-shadow: 0 24px 80px rgba(5, 3, 8, 0.6);
 }
 
 .settings-modal--large {
@@ -117,7 +117,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown));
 .settings-nav {
   flex: 0 0 160px;
   padding: 12px 9px;
-  background: rgba(255, 255, 255, 0.018);
+  background: var(--surface-subtle);
   border-right: 1px solid var(--border-subtle);
 }
 

@@ -165,7 +165,7 @@ base={base}
 repository={repository}
 resolution={resolution}
 
-echo "ShipYard · checking local work"
+echo "Shipyard · checking local work"
 {checkout_guard}
 
 integrate_target() {{
@@ -174,14 +174,14 @@ integrate_target() {{
   local reason="$3"
   mkdir -p "$(dirname "$resolution")"
   git -C "$source" worktree add --detach "$resolution" "$source_sha"
-  echo "ShipYard · $reason"
+  echo "Shipyard · $reason"
   if ! git -C "$resolution" merge --no-edit "$target"; then
     [[ -n "$(git -C "$resolution" diff --name-only --diff-filter=U)" ]]
-    echo "ShipYard · resolving automatically with {agent_label}"
+    echo "Shipyard · resolving automatically with {agent_label}"
     (cd "$resolution" && {conflict_command})
   fi
   if [[ -n "$(git -C "$resolution" diff --name-only --diff-filter=U)" ]]; then
-    echo "ShipYard · the agent left unresolved files" >&2
+    echo "Shipyard · the agent left unresolved files" >&2
     echo "Resolution checkout preserved at $resolution" >&2
     exit 1
   fi
@@ -196,7 +196,7 @@ integrate_target() {{
     git -C "$source" merge --ff-only "$RESOLVED_SHA"
   fi
   git -C "$source" worktree remove "$resolution"
-  echo "ShipYard · remote work integrated"
+  echo "Shipyard · remote work integrated"
 }}
 "#,
         source = shell(source),
@@ -219,7 +219,7 @@ integrate_target() {{
         | ShippingAction::DirectToMain => format!(
             r#"
 {metadata_guard}
-echo "ShipYard · asking {agent_label} to describe the change"
+echo "Shipyard · asking {agent_label} to describe the change"
 ({metadata_command}) | tee {metadata}
 python3 - {metadata} {parsed} {subject} {body} {pr_title} {pr_body} <<'PY'
 import json, pathlib, sys
@@ -246,7 +246,7 @@ PY
 git -C "$source" add -A
 if ! git -C "$source" diff --cached --quiet; then
   {{ cat {subject}; echo; cat {body}; }} | git -C "$source" commit -F -
-  echo "ShipYard · committed local work"
+  echo "Shipyard · committed local work"
 fi
 {metadata_guard_end}
 [[ -z "$(git -C "$source" status --porcelain --untracked-files=normal)" ]]
@@ -301,23 +301,23 @@ fi"#
 git -C "$source" fetch origin "$base" "$branch"
 if [[ "$(git -C "$source" branch --show-current)" == "$branch" ]] &&
    [[ -n "$(git -C "$source" status --porcelain --untracked-files=normal)" ]]; then
-  echo "ShipYard · local changes are not in the pull request; update it before merging" >&2
+  echo "Shipyard · local changes are not in the pull request; update it before merging" >&2
   exit 1
 fi
 local_sha="$(git -C "$source" rev-parse "refs/heads/$branch")"
 source_sha="$(git -C "$source" rev-parse "origin/$branch")"
 if [[ "$local_sha" != "$source_sha" ]]; then
-  echo "ShipYard · local commits are not synchronized with the pull request; update it before merging" >&2
+  echo "Shipyard · local commits are not synchronized with the pull request; update it before merging" >&2
   exit 1
 fi
 if ! git -C "$source" merge-tree --write-tree "$source_sha" "origin/$base" >/dev/null; then
   integrate_target "$source_sha" "origin/$base" "branch conflicts with origin/$base"
   git -C "$source" push origin "$RESOLVED_SHA:refs/heads/$branch"
 fi
-echo "ShipYard · merging pull request #{number}"
+echo "Shipyard · merging pull request #{number}"
 gh pr merge {number} --repo "$repository" --squash --delete-branch
 git -C "$source" fetch --prune origin
-echo "ShipYard · pull request merged"
+echo "Shipyard · pull request merged"
 "#,
                 number = number,
             )
@@ -328,16 +328,16 @@ echo "ShipYard · pull request merged"
         ShippingAction::CreatePullRequest => format!(
             r#"
 git -C "$source" push -u origin "HEAD:$branch"
-echo "ShipYard · creating pull request"
+echo "Shipyard · creating pull request"
 gh pr create --repo "$repository" --base "$base" --head "$branch" --title "$(cat {title})" --body-file {body}
-echo "ShipYard · pull request created"
+echo "Shipyard · pull request created"
 "#,
             title = shell(&pr_title),
             body = shell(&pr_body),
         ),
         ShippingAction::UpdatePullRequest => r#"
 git -C "$source" push origin "HEAD:$branch"
-echo "ShipYard · pull request updated"
+echo "Shipyard · pull request updated"
 "#
         .to_owned(),
         ShippingAction::DirectToMain => r#"
