@@ -75,8 +75,8 @@ async function openDeletion(workItemId: string) {
     worktreePath: item.worktreePath,
     headSha: item.headSha,
   };
-  const current = { project, item, request, plan: null as DeletionPlan | null, inspecting: true, deleting: false, error: null as string | null };
-  deletion.value = current;
+  deletion.value = { project, item, request, plan: null, inspecting: true, deleting: false, error: null };
+  const current = deletion.value;
   try {
     const plan = await inspectWorkItemDeletion(request);
     if (deletion.value === current) current.plan = plan;
