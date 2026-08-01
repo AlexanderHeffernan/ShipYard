@@ -1,7 +1,7 @@
 mod base_branch;
 mod branch;
 mod branch_reader;
-mod command;
+pub(crate) mod command;
 mod diff;
 mod diff_stats;
 mod project;
@@ -20,6 +20,7 @@ pub(crate) use repository::{belongs_to_project, resolve};
 pub use scanner::scan_project;
 pub(crate) use work_item::PullRequest;
 pub(crate) use worktree_reader::paths as worktree_paths;
+pub(crate) use worktree_reader::primary_path as primary_worktree_path;
 
 #[cfg(test)]
 mod tests;

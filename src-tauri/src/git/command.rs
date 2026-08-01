@@ -3,7 +3,7 @@ use std::{
     process::{Command, Output},
 };
 
-pub(super) fn text(root: &Path, args: &[&str]) -> Result<String, String> {
+pub(crate) fn text(root: &Path, args: &[&str]) -> Result<String, String> {
     let output = output(root, args)?;
     Ok(bytes_text(&output.stdout).to_owned())
 }
@@ -16,7 +16,7 @@ pub(super) fn optional_text(root: &Path, args: &[&str]) -> Option<String> {
         .then(|| bytes_text(&output.stdout).to_owned())
 }
 
-pub(super) fn output(root: &Path, args: &[&str]) -> Result<Output, String> {
+pub(crate) fn output(root: &Path, args: &[&str]) -> Result<Output, String> {
     let output = output_allow_failure(root, args);
     if output.status.success() {
         Ok(output)
@@ -29,7 +29,7 @@ pub(super) fn output(root: &Path, args: &[&str]) -> Result<Output, String> {
     }
 }
 
-pub(super) fn output_allow_failure(root: &Path, args: &[&str]) -> Output {
+pub(crate) fn output_allow_failure(root: &Path, args: &[&str]) -> Output {
     Command::new("git")
         .arg("-C")
         .arg(root)
@@ -44,7 +44,7 @@ pub(super) fn output_allow_failure(root: &Path, args: &[&str]) -> Output {
         })
 }
 
-pub(super) fn error(output: &Output) -> String {
+pub(crate) fn error(output: &Output) -> String {
     let message = bytes_text(&output.stderr).trim();
     if message.is_empty() {
         "unknown Git error".to_owned()
