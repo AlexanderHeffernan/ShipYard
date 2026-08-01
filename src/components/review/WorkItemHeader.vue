@@ -37,9 +37,6 @@ const statusClass = computed(() => {
       <div class="work-header__identity">
         <span class="work-header__dot" :style="{ background: project.color }"></span>
         <h1>{{ title }}</h1>
-        <span class="status-pill" :class="statusClass">
-          {{ statusLabel }}
-        </span>
       </div>
 
       <div class="work-header__actions">
@@ -56,10 +53,8 @@ const statusClass = computed(() => {
       <span class="work-header__separator"></span>
       <span v-if="workItem.pullRequest">#{{ workItem.pullRequest.number }}</span>
       <span v-else :class="{ 'work-header__changes': workItem.status === 'working' }">{{ meta }}</span>
-      <template v-if="syncLabel">
-        <span class="work-header__separator"></span>
-        <span class="work-header__sync" :class="{ 'work-header__sync--danger': syncState === 'diverged' }">{{ syncLabel }}</span>
-      </template>
+      <span class="work-header__separator"></span>
+      <span class="status-pill" :class="statusClass">{{ statusLabel }}</span>
     </div>
   </header>
 </template>
@@ -196,25 +191,5 @@ const statusClass = computed(() => {
 
 .work-header__changes {
   font-variant-numeric: tabular-nums;
-}
-
-.work-header__sync {
-  color: #e7b950;
-}
-
-.work-header__sync--danger {
-  color: #ff8f8f;
-}
-
-@media (max-width: 680px) {
-  .work-header__actions > button {
-    width: 26px;
-    padding: 0;
-    justify-content: center;
-  }
-
-  .work-header__actions > button span {
-    display: none;
-  }
 }
 </style>
