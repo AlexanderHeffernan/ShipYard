@@ -166,11 +166,11 @@ onBeforeUnmount(stopResize);
           variant="ghost"
           block
           type="button"
-          title="Settings for ShipYard across all projects"
+          title="Settings for Shipyard across all projects"
           @click="emit('settings')"
         >
           <Settings aria-hidden="true" />
-          ShipYard Settings
+          Shipyard Settings
         </AppButton>
       </footer>
     </div>
@@ -386,11 +386,11 @@ onBeforeUnmount(stopResize);
 }
 
 .work-item__meta--attention {
-  color: #e7b950;
+  color: var(--warning);
 }
 
 .work-item__meta--danger {
-  color: #ff8f8f;
+  color: var(--danger);
 }
 
 .sidebar__resize-handle {

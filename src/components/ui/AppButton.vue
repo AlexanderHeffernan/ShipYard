@@ -54,7 +54,7 @@ withDefaults(
   font: inherit;
   font-size: 11px;
   color: var(--text-secondary);
-  background: rgba(255, 255, 255, 0.035);
+  background: var(--surface-subtle);
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
   transition: background 100ms ease, border-color 100ms ease, color 100ms ease;
@@ -66,7 +66,7 @@ withDefaults(
 }
 
 .app-button:active:not(:disabled) {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--surface-active);
 }
 
 .app-button:focus-visible {
@@ -104,31 +104,31 @@ withDefaults(
 }
 
 .app-button--primary {
-  color: rgba(255, 255, 255, 0.94);
-  background: #3478d4;
-  border-color: #3f82dd;
+  color: var(--primary-foreground);
+  background: var(--primary);
+  border-color: var(--primary);
 }
 
 .app-button--primary:hover:not(:disabled) {
-  color: white;
-  background: #3c83e0;
-  border-color: #4a8ce8;
+  color: var(--primary-foreground);
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
 }
 
 .app-button--danger {
-  color: #ff9292;
+  color: var(--danger);
   background: transparent;
   border-color: transparent;
 }
 
 .app-button--danger:hover:not(:disabled) {
-  color: #ffaaaa;
-  background: rgba(255, 100, 100, 0.1);
+  color: var(--danger);
+  background: var(--danger-subtle);
 }
 
 .app-button--success {
-  color: #9ae3b5;
-  border-color: rgba(100, 207, 140, 0.32);
+  color: var(--success);
+  border-color: var(--success-border);
 }
 
 .app-button :deep(svg) {

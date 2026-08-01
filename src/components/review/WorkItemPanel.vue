@@ -128,7 +128,7 @@ const activeTab = ref<ReviewTab>('changes');
   left: 0;
   height: 2px;
   content: '';
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--primary);
   border-radius: 1px 1px 0 0;
 }
 
@@ -145,7 +145,7 @@ const activeTab = ref<ReviewTab>('changes');
   place-items: center;
   font-size: 10px;
   color: var(--text-secondary);
-  background: rgba(255, 255, 255, 0.055);
+  background: var(--surface-subtle);
   border-radius: 8px;
 }
 
@@ -169,7 +169,7 @@ const activeTab = ref<ReviewTab>('changes');
   width: 24px;
   margin-bottom: 3px;
   fill: none;
-  stroke: rgba(255, 255, 255, 0.33);
+  stroke: var(--text-muted);
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 1.1;
@@ -178,7 +178,7 @@ const activeTab = ref<ReviewTab>('changes');
 .work-panel__placeholder strong {
   font-size: 13px;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--text-primary);
 }
 
 .work-panel__placeholder span {

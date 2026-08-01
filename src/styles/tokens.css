@@ -7,14 +7,43 @@
   text-rendering: optimizeLegibility;
 
   --titlebar-height: 42px;
-  --surface-content: #101116;
-  --surface-sidebar: rgba(19, 20, 25, 0.52);
-  --surface-hover: rgba(255, 255, 255, 0.07);
-  --text-primary: rgba(255, 255, 255, 0.92);
-  --text-secondary: rgba(255, 255, 255, 0.56);
-  --border-subtle: rgba(255, 255, 255, 0.09);
-  --focus-ring: rgba(130, 170, 255, 0.85);
-  --resize-indicator: rgba(255, 255, 255, 0.28);
+
+  /* Neutral surfaces inherit the icon's deep charcoal-purple harbor tones. */
+  --surface-content: #100d18;
+  --surface-sidebar: rgba(24, 15, 29, 0.62);
+  --surface-elevated: #19141f;
+  --surface-input: #0d0b12;
+  --surface-subtle: rgba(255, 255, 255, 0.035);
+  --surface-hover: rgba(251, 119, 31, 0.08);
+  --surface-active: rgba(251, 119, 31, 0.13);
+  --surface-scrim: rgba(8, 5, 12, 0.64);
+
+  --text-primary: rgba(255, 250, 252, 0.94);
+  --text-secondary: rgba(236, 222, 232, 0.64);
+  --text-muted: rgba(236, 222, 232, 0.42);
+  --border-subtle: rgba(255, 240, 248, 0.1);
+  --border-strong: rgba(255, 240, 248, 0.16);
+
+  /* The sunset orange is reserved for interaction and selection emphasis. */
+  --primary: #fb771f;
+  --primary-hover: #fc9320;
+  --primary-foreground: #100d18;
+  --primary-subtle: rgba(251, 119, 31, 0.11);
+  --primary-border: rgba(251, 119, 31, 0.34);
+  --focus-ring: rgba(251, 119, 31, 0.88);
+
+  --success: #64cf8c;
+  --success-subtle: rgba(100, 207, 140, 0.1);
+  --success-border: rgba(100, 207, 140, 0.26);
+  --warning: #e7b950;
+  --warning-subtle: rgba(231, 185, 80, 0.1);
+  --warning-border: rgba(231, 185, 80, 0.2);
+  --danger: #ff8f8f;
+  --danger-subtle: rgba(255, 85, 85, 0.1);
+  --danger-border: rgba(255, 85, 85, 0.24);
+
+  --resize-indicator: rgba(255, 240, 248, 0.28);
+  --shadow-elevated: 0 14px 36px rgba(5, 3, 8, 0.5);
 }
 
 *,

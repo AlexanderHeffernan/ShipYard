@@ -140,7 +140,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeMenu));
   font: inherit;
   font-size: 11px;
   color: var(--text-secondary);
-  background: rgba(255, 255, 255, 0.035);
+  background: var(--surface-subtle);
   border: 1px solid var(--border-subtle);
   border-radius: 0;
 }
@@ -201,10 +201,10 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeMenu));
   width: 210px;
   padding: 5px;
   overflow: hidden;
-  background: #17181d;
-  border: 1px solid rgba(255, 255, 255, 0.13);
+  background: var(--surface-elevated);
+  border: 1px solid var(--border-strong);
   border-radius: 8px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.46);
+  box-shadow: var(--shadow-elevated);
 }
 
 .run-menu button {
@@ -249,7 +249,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeMenu));
 }
 
 .run-menu .run-menu__error {
-  color: #ff8f8f;
+  color: var(--danger);
 }
 
 @media (max-width: 680px) {

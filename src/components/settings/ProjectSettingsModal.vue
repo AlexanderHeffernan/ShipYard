@@ -223,26 +223,26 @@ onBeforeUnmount(() => window.clearTimeout(savedFeedbackTimer));
 .run-settings__heading p { margin: 5px 0 0; font-size: 11px; color: var(--text-secondary); }
 .run-settings__loading { display: grid; min-height: 0; flex: 1; place-items: center; font-size: 11px; color: var(--text-secondary); }
 .run-settings__empty { display: flex; min-height: 0; flex: 1; align-items: center; justify-content: center; flex-direction: column; padding-bottom: 22px; text-align: center; border: 1px solid var(--border-subtle); border-radius: 8px; }
-.run-settings__empty-icon { display: grid; width: 46px; height: 46px; margin-bottom: 13px; place-items: center; color: rgba(255,255,255,.46); background: rgba(255,255,255,.045); border: 1px solid var(--border-subtle); border-radius: 12px; }
+.run-settings__empty-icon { display: grid; width: 46px; height: 46px; margin-bottom: 13px; place-items: center; color: var(--text-muted); background: var(--surface-subtle); border: 1px solid var(--border-subtle); border-radius: 12px; }
 .run-settings__empty-icon svg { width: 22px; height: 22px; stroke-width: 1.4; }
 .run-settings__empty h4 { margin: 0; font-size: 13px; font-weight: 550; }
 .run-settings__empty p { max-width: 280px; margin: 7px 0 16px; font-size: 11px; line-height: 1.45; color: var(--text-secondary); }
-.run-settings__empty .script-editor__error { margin-top: 12px; margin-bottom: 0; color: #ff8f8f; }
+.run-settings__empty .script-editor__error { margin-top: 12px; margin-bottom: 0; color: var(--danger); }
 .run-settings__content { display: flex; min-height: 0; flex: 1; overflow: hidden; border: 1px solid var(--border-subtle); border-radius: 8px; }
-.script-list { flex: 0 0 170px; padding: 7px; overflow-y: auto; background: rgba(255,255,255,.018); border-right: 1px solid var(--border-subtle); }
+.script-list { flex: 0 0 170px; padding: 7px; overflow-y: auto; background: var(--surface-subtle); border-right: 1px solid var(--border-subtle); }
 .script-list button { display: flex; justify-content: space-between; align-items: center; width: 100%; min-height: 34px; padding: 7px 8px; overflow: hidden; font: inherit; font-size: 11px; color: var(--text-secondary); text-align: left; background: transparent; border: 0; border-radius: 5px; }
 .script-list button:hover, .script-list__active { color: var(--text-primary) !important; background: var(--surface-hover) !important; }
 .script-list button > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.script-list__default { margin-left: 5px; font-size: 9px; color: #79aeff; }
+.script-list__default { margin-left: 5px; font-size: 9px; color: var(--primary-hover); }
 .script-editor { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 13px; padding: 15px; }
 .script-editor label > span { display: block; margin-bottom: 6px; font-size: 10px; font-weight: 550; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .04em; }
-.script-editor input:not([type='checkbox']), .script-editor textarea { width: 100%; color: var(--text-primary); background: #0e0f13; border: 1px solid rgba(255,255,255,.11); border-radius: 6px; outline: none; }
+.script-editor input:not([type='checkbox']), .script-editor textarea { width: 100%; color: var(--text-primary); background: var(--surface-input); border: 1px solid var(--border-subtle); border-radius: 6px; outline: none; }
 .script-editor input:not([type='checkbox']):focus, .script-editor textarea:focus { border-color: var(--focus-ring); }
 .script-editor input:not([type='checkbox']) { height: 32px; padding: 0 9px; font: inherit; font-size: 12px; }
 .script-editor__body { display: flex; min-height: 0; flex: 1; flex-direction: column; }
 .script-editor textarea { min-height: 130px; flex: 1; padding: 10px; resize: none; font: 11px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; tab-size: 2; }
 .script-editor__default { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--text-secondary); }
-.script-editor__path { margin: -5px 0 0; overflow: hidden; font: 9px ui-monospace, SFMono-Regular, Menlo, monospace; color: rgba(255,255,255,.32); text-overflow: ellipsis; white-space: nowrap; }
-.script-editor__error { margin: 0; font-size: 11px; color: #ff8f8f; }
+.script-editor__path { margin: -5px 0 0; overflow: hidden; font: 9px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text-muted); text-overflow: ellipsis; white-space: nowrap; }
+.script-editor__error { margin: 0; font-size: 11px; color: var(--danger); }
 .script-editor__actions { display: flex; align-items: center; justify-content: space-between; }
 </style>

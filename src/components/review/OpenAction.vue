@@ -119,7 +119,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeMenu));
 
 <style scoped>
 .open-control { position: relative; display: flex; }
-.open-control > button { display: flex; align-items: center; gap: 5px; height: 24px; padding: 0 8px; font: inherit; font-size: 11px; color: var(--text-secondary); background: rgba(255,255,255,.035); border: 1px solid var(--border-subtle); border-radius: 0; }
+.open-control > button { display: flex; align-items: center; gap: 5px; height: 24px; padding: 0 8px; font: inherit; font-size: 11px; color: var(--text-secondary); background: var(--surface-subtle); border: 1px solid var(--border-subtle); border-radius: 0; }
 .open-control > button:hover:not(:disabled) { color: var(--text-primary); background: var(--surface-hover); }
 .open-control > button:focus-visible, .open-menu button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
 .open-control svg { width: 13px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.35; }
@@ -128,14 +128,14 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeMenu));
 .open-control__menu-button { width: 22px; padding: 0 !important; justify-content: center; margin-left: -1px; border-radius: 0 6px 6px 0 !important; }
 .open-control__menu-button svg { width: 10px; }
 .open-control > button:disabled { opacity: .45; }
-.open-menu { position: absolute; z-index: 6; top: 29px; left: 0; width: 230px; padding: 5px; overflow: hidden; background: #17181d; border: 1px solid rgba(255,255,255,.13); border-radius: 8px; box-shadow: 0 12px 32px rgba(0,0,0,.46); }
+.open-menu { position: absolute; z-index: 6; top: 29px; left: 0; width: 230px; padding: 5px; overflow: hidden; background: var(--surface-elevated); border: 1px solid var(--border-strong); border-radius: 8px; box-shadow: var(--shadow-elevated); }
 .open-menu button { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 30px; padding: 5px 7px; font: inherit; font-size: 11px; color: var(--text-primary); text-align: left; background: transparent; border: 0; border-radius: 5px; }
 .open-menu button:hover:not(:disabled) { background: var(--surface-hover); }
 .open-menu button:disabled { color: var(--text-secondary); }
 .open-menu small { flex: 0 0 auto; font-size: 9px; color: var(--text-secondary); text-transform: capitalize; }
 .open-menu .open-menu__settings { display: block; margin-top: 4px; padding-left: 8px; color: var(--text-secondary); border-top: 1px solid var(--border-subtle); border-radius: 0 0 5px 5px; }
 .open-menu p { margin: 0; padding: 8px; font-size: 10px; color: var(--text-secondary); }
-.open-menu .open-menu__notice { line-height: 1.4; color: #e7b950; }
-.open-menu .open-menu__error { line-height: 1.4; color: #ff8f8f; }
+.open-menu .open-menu__notice { line-height: 1.4; color: var(--warning); }
+.open-menu .open-menu__error { line-height: 1.4; color: var(--danger); }
 @media (max-width: 680px) { .open-control > button { width: 26px; padding: 0; justify-content: center; } .open-control > button span { display: none; } .open-control__menu-button { width: 18px !important; } }
 </style>

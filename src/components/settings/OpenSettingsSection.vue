@@ -167,23 +167,23 @@ onBeforeUnmount(() => window.clearTimeout(savedFeedbackTimer));
 .open-settings__heading p { margin: 5px 0 0; font-size: 11px; color: var(--text-secondary); }
 .open-settings__loading { display: grid; flex: 1; place-items: center; font-size: 11px; color: var(--text-secondary); }
 .open-settings__empty { display: flex; flex: 1; align-items: center; justify-content: center; flex-direction: column; text-align: center; border: 1px solid var(--border-subtle); border-radius: 8px; }
-.open-settings__empty > span { display: grid; width: 46px; height: 46px; margin-bottom: 13px; place-items: center; color: rgba(255,255,255,.46); background: rgba(255,255,255,.045); border: 1px solid var(--border-subtle); border-radius: 12px; }
+.open-settings__empty > span { display: grid; width: 46px; height: 46px; margin-bottom: 13px; place-items: center; color: var(--text-muted); background: var(--surface-subtle); border: 1px solid var(--border-subtle); border-radius: 12px; }
 .open-settings__empty svg { width: 22px; }
 .open-settings__empty h4 { margin: 0; font-size: 13px; font-weight: 550; }
 .open-settings__empty p { margin: 7px 0 16px; font-size: 11px; color: var(--text-secondary); }
 .open-settings__content { display: flex; min-height: 0; flex: 1; overflow: hidden; border: 1px solid var(--border-subtle); border-radius: 8px; }
-.application-list { flex: 0 0 180px; padding: 7px; overflow-y: auto; background: rgba(255,255,255,.018); border-right: 1px solid var(--border-subtle); }
+.application-list { flex: 0 0 180px; padding: 7px; overflow-y: auto; background: var(--surface-subtle); border-right: 1px solid var(--border-subtle); }
 .application-list button { display: flex; align-items: center; justify-content: space-between; gap: 5px; width: 100%; min-height: 34px; padding: 7px 8px; font: inherit; font-size: 11px; color: var(--text-secondary); background: transparent; border: 0; border-radius: 5px; }
 .application-list button:hover, .application-list__active { color: var(--text-primary) !important; background: var(--surface-hover) !important; }
 .application-list span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .application-list small { font-size: 9px; color: var(--text-secondary); text-transform: capitalize; }
 .application-editor { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 15px; padding: 15px; }
 .application-editor label > span { display: block; margin-bottom: 6px; font-size: 10px; font-weight: 550; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .04em; }
-.application-editor input:not([type='checkbox']), .application-editor select { width: 100%; height: 32px; padding: 0 9px; font: inherit; font-size: 12px; color: var(--text-primary); background: #0e0f13; border: 1px solid rgba(255,255,255,.11); border-radius: 6px; outline: none; }
+.application-editor input:not([type='checkbox']), .application-editor select { width: 100%; height: 32px; padding: 0 9px; font: inherit; font-size: 12px; color: var(--text-primary); background: var(--surface-input); border: 1px solid var(--border-subtle); border-radius: 6px; outline: none; }
 .application-editor input:focus, .application-editor select:focus { border-color: var(--focus-ring); }
 .application-editor__path-row { display: flex; gap: 7px; }
 .application-editor__path-row input { min-width: 0; flex: 1; font-size: 10px !important; }
 .application-editor__default { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--text-secondary); }
-.application-editor__error { margin: 0; font-size: 11px; line-height: 1.4; color: #ff8f8f; }
+.application-editor__error { margin: 0; font-size: 11px; line-height: 1.4; color: var(--danger); }
 .application-editor__actions { display: flex; align-items: center; justify-content: space-between; margin-top: auto; }
 </style>

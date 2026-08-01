@@ -82,16 +82,17 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeMenu));
 
 <style scoped>
 .ship-control { position: relative; display: flex; }
-.ship-control > button { display: flex; align-items: center; gap: 5px; height: 24px; padding: 0 8px; font: inherit; font-size: 11px; color: #dbe7ff; background: rgba(69,117,220,.2); border: 1px solid rgba(100,145,240,.3); }
-.ship-control > button:hover { background: rgba(69,117,220,.3); }
+.ship-control > button { display: flex; align-items: center; gap: 5px; height: 24px; padding: 0 8px; font: inherit; font-size: 11px; font-weight: 600; color: var(--primary-foreground); background: var(--primary); border: 1px solid var(--primary); }
+.ship-control > button:hover:not(:disabled) { background: var(--primary-hover); border-color: var(--primary-hover); }
+.ship-control > button:focus-visible, .ship-menu button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
 .ship-control > button:disabled { opacity: .45; }
 .ship-control svg { width: 13px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.35; }
 .ship-control__main { max-width: 140px; border-radius: 6px 0 0 6px; }
 .ship-control__main--single { border-radius: 6px; }
 .ship-control__menu-button { width: 22px; justify-content: center; padding: 0 !important; margin-left: -1px; border-radius: 0 6px 6px 0; }
 .ship-control__menu-button svg { width: 10px; }
-.ship-menu { position: absolute; z-index: 7; top: 29px; right: 0; width: 210px; padding: 5px; background: #17181d; border: 1px solid rgba(255,255,255,.13); border-radius: 8px; box-shadow: 0 12px 32px rgba(0,0,0,.46); }
+.ship-menu { position: absolute; z-index: 7; top: 29px; right: 0; width: 210px; padding: 5px; background: var(--surface-elevated); border: 1px solid var(--border-strong); border-radius: 8px; box-shadow: var(--shadow-elevated); }
 .ship-menu button { width: 100%; min-height: 30px; padding: 5px 8px; font: inherit; font-size: 11px; color: var(--text-primary); text-align: left; background: transparent; border: 0; border-radius: 5px; }
 .ship-menu button:hover { background: var(--surface-hover); }
-.ship-menu p { margin: 0; padding: 7px; font-size: 10px; color: #ff8f8f; }
+.ship-menu p { margin: 0; padding: 7px; font-size: 10px; color: var(--danger); }
 </style>
