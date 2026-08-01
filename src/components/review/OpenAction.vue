@@ -18,7 +18,7 @@ const defaultApplication = computed(() =>
 );
 const checkoutPath = computed(() => props.workItem.worktreePath);
 const label = computed(() =>
-  defaultApplication.value ? `Open: ${defaultApplication.value.label}` : 'Set up Open',
+  defaultApplication.value ? defaultApplication.value.label : 'Set up Open',
 );
 const disabledReason = computed(() => {
   if (!checkoutPath.value) return 'This branch needs to be checked out before it can be opened';

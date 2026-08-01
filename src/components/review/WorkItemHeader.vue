@@ -1,7 +1,5 @@
 <script setup lang="ts">
-import { Settings } from '@lucide/vue';
 import { computed } from 'vue';
-import AppButton from '../ui/AppButton.vue';
 import type { Project, WorkItem } from '../../types/projects';
 import { pullRequestSyncLabel, pullRequestSyncState, workItemKind, workItemMeta, workItemTitle } from '../../utils/workItems';
 import OpenAction from './OpenAction.vue';
@@ -48,18 +46,6 @@ const statusClass = computed(() => {
         <OpenAction :project="project" :work-item="workItem" @settings="emit('settings', 'open')" />
         <RunAction :project="project" :work-item="workItem" @settings="emit('settings', $event)" />
         <ShipAction :project="project" :work-item="workItem" @refresh="emit('refresh')" />
-        <AppButton
-          class="work-header__settings"
-          variant="ghost"
-          size="small"
-          type="button"
-          :aria-label="`Project settings for ${project.name}`"
-          :title="`Project settings — ${project.name}`"
-          @click="emit('settings', 'run')"
-        >
-          <Settings aria-hidden="true" />
-          <span>Project Settings</span>
-        </AppButton>
       </div>
     </div>
 
@@ -186,10 +172,6 @@ const statusClass = computed(() => {
   align-items: center;
   gap: 5px;
   margin-left: 12px;
-}
-
-.work-header__settings {
-  height: 24px;
 }
 
 .work-header__secondary {

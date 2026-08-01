@@ -33,7 +33,7 @@ const label = computed(() => {
   if (isActive.value && currentRun.value?.status === 'stopping') return 'Stopping…';
   if (isActive.value) return 'Stop';
   if (!defaultScript.value) return 'Set up Run';
-  return `Run: ${defaultScript.value.label}`;
+  return defaultScript.value.label;
 });
 const actionName = computed(() => 'Run');
 const mainDisabled = computed(
