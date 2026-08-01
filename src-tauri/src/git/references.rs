@@ -63,6 +63,11 @@ pub(super) fn comparison(
     }
 }
 
+pub(super) fn remote_tracking_base(root: &Path, base: Option<&BaseBranch>) -> Option<String> {
+    let reference = format!("refs/remotes/origin/{}", base?.name);
+    command::optional_text(root, &["rev-parse", "--verify", &reference]).map(|_| reference)
+}
+
 pub(super) fn classify(
     root: &Path,
     dirty: bool,

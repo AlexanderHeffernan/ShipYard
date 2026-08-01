@@ -47,6 +47,7 @@ impl RunManager {
             terminal.child,
             output,
             self.sessions.clone(),
+            prepared.cleanup,
         );
         Ok(RunStarted { run_id })
     }
@@ -71,6 +72,7 @@ impl RunManager {
             terminal.child,
             output,
             self.sessions.clone(),
+            None,
         );
         Ok(RunStarted { run_id })
     }
@@ -195,12 +197,30 @@ fn wait_for_exit(
     mut child: Box<dyn portable_pty::Child + Send + Sync>,
     output: thread::JoinHandle<()>,
     sessions: Arc<std::sync::Mutex<std::collections::HashMap<String, Arc<RunSession>>>>,
+    cleanup: Option<shipping::ShippingCleanup>,
 ) {
     thread::spawn(move || {
         let status = child.wait();
         let _ = output.join();
         if let Ok(mut sessions) = sessions.lock() {
             sessions.remove(&run_id);
+        }
+        if status.as_ref().is_ok_and(|status| status.success()) {
+            if let Some(cleanup) = cleanup.as_ref() {
+                let message = shipping::cleanup_after_success(cleanup).unwrap_or_else(|error| {
+                    format!(
+                        "ShipYard · shipped successfully, but automatic cleanup was skipped: {error}\n"
+                    )
+                });
+                let _ = app.emit(
+                    "run-output",
+                    RunEvent {
+                        run_id: run_id.clone(),
+                        data: message.into_bytes(),
+                    },
+                );
+                let _ = app.emit("project-changed", shipping::cleanup_project_id(cleanup));
+            }
         }
         let event = match status {
             Ok(status) => RunFinished {

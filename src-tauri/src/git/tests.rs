@@ -107,6 +107,30 @@ fn fresh_clean_linked_worktree_is_working_until_explicitly_shipped() {
 }
 
 #[test]
+fn classifies_a_primary_feature_branch_as_shipped_when_remote_main_contains_it() {
+    let root = committed_repository("remote-shipped");
+    let remote = root.with_extension("remote.git");
+    run(&root, &["init", "--bare", remote.to_str().unwrap()]);
+    run(
+        &root,
+        &["remote", "add", "origin", remote.to_str().unwrap()],
+    );
+    run(&root, &["push", "-u", "origin", "main"]);
+    run(&root, &["switch", "-c", "feature/direct"]);
+    fs::write(root.join("feature.txt"), "feature\n").unwrap();
+    run(&root, &["add", "feature.txt"]);
+    run(&root, &["commit", "-m", "Feature"]);
+    run(&root, &["push", "origin", "HEAD:main"]);
+    run(&root, &["fetch", "origin", "main"]);
+
+    assert_branch_status(&root, "feature/direct", WorkStatus::Shipped);
+    assert_eq!(text(&root, &["branch", "--show-current"]), "feature/direct");
+
+    fs::remove_dir_all(root).unwrap();
+    fs::remove_dir_all(remote).unwrap();
+}
+
+#[test]
 fn validates_only_the_exact_checkout_for_its_project() {
     let root = committed_repository("validate-worktree");
     fs::create_dir(root.join("nested")).unwrap();
@@ -398,4 +422,16 @@ fn run(root: &Path, args: &[&str]) {
         args.join(" "),
         String::from_utf8_lossy(&output.stderr)
     );
+}
+
+fn text(root: &Path, args: &[&str]) -> String {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(args)
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    String::from_utf8_lossy(&output.stdout).trim().to_owned()
 }

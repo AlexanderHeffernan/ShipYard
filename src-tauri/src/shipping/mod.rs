@@ -6,6 +6,9 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+mod cleanup;
+pub(crate) use cleanup::ShippingCleanup;
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ShippingRequest {
@@ -32,6 +35,7 @@ enum ShippingAction {
 pub(crate) struct PreparedShipping {
     pub(crate) script_path: PathBuf,
     pub(crate) working_directory: PathBuf,
+    pub(crate) cleanup: Option<ShippingCleanup>,
 }
 
 pub(crate) fn prepare(base: &Path, request: ShippingRequest) -> Result<PreparedShipping, String> {
@@ -73,6 +77,7 @@ fn prepare_with_adapter(
 
     let script_path = operation_dir.join("ship.sh");
     let resolution_path = base.join("resolutions").join(&operation_id);
+    let shipped_commit_path = operation_dir.join("shipped-commit.txt");
     let script = script(
         &request,
         adapter,
@@ -80,6 +85,7 @@ fn prepare_with_adapter(
         &metadata_prompt,
         &conflict_prompt,
         &resolution_path,
+        &shipped_commit_path,
     )?;
     fs::write(&script_path, script).map_err(|error| error.to_string())?;
     #[cfg(unix)]
@@ -90,8 +96,23 @@ fn prepare_with_adapter(
     }
     Ok(PreparedShipping {
         script_path,
-        working_directory: source,
+        working_directory: source.clone(),
+        cleanup: matches!(request.action, ShippingAction::DirectToMain).then(|| ShippingCleanup {
+            project_id: request.project_id,
+            source,
+            branch: branch.to_owned(),
+            base: request.default_branch,
+            receipt: shipped_commit_path,
+        }),
     })
+}
+
+pub(crate) fn cleanup_after_success(cleanup: &ShippingCleanup) -> Result<String, String> {
+    cleanup::after_success(cleanup)
+}
+
+pub(crate) fn cleanup_project_id(cleanup: &ShippingCleanup) -> &str {
+    &cleanup.project_id
 }
 
 fn metadata_prompt_text(request: &ShippingRequest) -> String {
@@ -117,6 +138,7 @@ fn script(
     metadata_prompt: &Path,
     conflict_prompt: &Path,
     resolution_path: &Path,
+    shipped_commit_path: &Path,
 ) -> Result<String, String> {
     let branch = request.source_branch.as_deref().unwrap_or_default();
     let metadata_command = agent_command(
@@ -322,12 +344,19 @@ echo "Shipyard · pull request updated"
 source_sha="$(git -C "$source" rev-parse HEAD)"
 if ! git -C "$source" merge-base --is-ancestor "origin/$base" "$source_sha"; then
   integrate_target "$source_sha" "origin/$base" "branch needs the latest origin/$base"
+  source_sha="$RESOLVED_SHA"
 fi
-echo "Shipyard · pushing the resolved commit directly to $base"
-git -C "$source" push origin "HEAD:$base"
-echo "Shipyard · shipped directly to $base"
+[[ "$(git -C "$source" branch --show-current)" == "$branch" ]]
+[[ "$(git -C "$source" rev-parse HEAD)" == "$source_sha" ]]
+[[ -z "$(git -C "$source" status --porcelain --untracked-files=normal)" ]]
+echo "ShipYard · pushing the resolved commit directly to $base"
+git -C "$source" push origin "${source_sha}:refs/heads/$base"
+git -C "$source" fetch origin "$base"
+git -C "$source" merge-base --is-ancestor "$source_sha" "origin/$base"
+printf '%s\n' "$source_sha" > {shipped_commit}
+echo "ShipYard · shipped directly to $base"
 "#
-        .to_owned(),
+        .replace("{shipped_commit}", &shell(shipped_commit_path)),
         ShippingAction::MergePullRequest => String::new(),
     };
 
@@ -448,7 +477,7 @@ mod tests {
         .unwrap();
         let previous_main = text(&checkout, &["rev-parse", "origin/main"]);
         let output = Command::new("/bin/zsh")
-            .arg(prepared.script_path)
+            .arg(&prepared.script_path)
             .output()
             .unwrap();
         assert!(
@@ -462,6 +491,12 @@ mod tests {
             text(&checkout, &["rev-parse", "HEAD"])
         );
         assert_ne!(previous_main, text(&checkout, &["rev-parse", "HEAD"]));
+        assert_eq!(
+            fs::read_to_string(&prepared.cleanup.as_ref().unwrap().receipt)
+                .unwrap()
+                .trim(),
+            text(&checkout, &["rev-parse", "HEAD"])
+        );
         assert_eq!(
             fs::read_to_string(checkout.join("conflict.txt")).unwrap(),
             "resolved\n"

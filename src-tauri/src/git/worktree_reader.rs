@@ -26,6 +26,14 @@ pub(crate) fn paths(root: &Path) -> Result<Vec<PathBuf>, String> {
         .collect())
 }
 
+pub(crate) fn primary_path(root: &Path) -> Result<PathBuf, String> {
+    read(root)?
+        .into_iter()
+        .find(|worktree| !worktree.bare)
+        .map(|worktree| worktree.path)
+        .ok_or_else(|| "project has no primary checkout".to_owned())
+}
+
 fn parse_field(field: &str, worktrees: &mut Vec<Worktree>, current: &mut Option<Worktree>) {
     if let Some(path) = field.strip_prefix("worktree ") {
         push_current(worktrees, current);

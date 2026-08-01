@@ -92,8 +92,16 @@ fn branch_item(
         .transpose()?
         .unwrap_or_default();
     let comparison = references::comparison(root, &branch, base);
+    let remote_base = references::remote_tracking_base(root, base);
     let is_base = base.is_some_and(|base| base.reference == branch.reference);
-    let status = branch_status(root, &branch, &stats, comparison.as_deref(), is_base)?;
+    let status = branch_status(
+        root,
+        &branch,
+        &stats,
+        comparison.as_deref(),
+        remote_base.as_deref(),
+        is_base,
+    )?;
     if is_base && !stats.dirty && status == WorkStatus::Shipped {
         return Ok(None);
     }
@@ -112,6 +120,7 @@ fn branch_status(
     branch: &Branch,
     stats: &DiffStats,
     comparison: Option<&str>,
+    remote_base: Option<&str>,
     is_base: bool,
 ) -> Result<WorkStatus, String> {
     if is_base && comparison.is_none() && !stats.dirty {
@@ -124,6 +133,14 @@ fn branch_status(
             .unwrap_or(false)
     {
         Ok(WorkStatus::Working)
+    } else if !is_base
+        && !stats.dirty
+        && remote_base
+            .map(|base| references::classify(root, false, &branch.reference, Some(base)))
+            .transpose()?
+            .is_some_and(|status| status == WorkStatus::Shipped)
+    {
+        Ok(WorkStatus::Shipped)
     } else {
         references::classify(root, stats.dirty, &branch.reference, comparison)
     }
