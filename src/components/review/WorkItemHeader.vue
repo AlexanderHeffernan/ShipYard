@@ -123,40 +123,40 @@ const statusClass = computed(() => {
 }
 
 .status-pill--local {
-  color: #e7b950;
-  background: rgba(231, 185, 80, 0.1);
-  border-color: rgba(231, 185, 80, 0.18);
+  color: var(--warning);
+  background: var(--warning-subtle);
+  border-color: var(--warning-border);
 }
 
 .status-pill--localChanges,
 .status-pill--localAhead,
 .status-pill--remoteAhead {
-  color: #e7b950;
-  background: rgba(231, 185, 80, 0.1);
-  border-color: rgba(231, 185, 80, 0.18);
+  color: var(--warning);
+  background: var(--warning-subtle);
+  border-color: var(--warning-border);
 }
 
 .status-pill--ready,
 .status-pill--checksPending,
 .status-pill--reviewRequired,
 .status-pill--draft {
-  color: #79aeff;
-  background: rgba(80, 145, 255, 0.11);
-  border-color: rgba(80, 145, 255, 0.2);
+  color: var(--primary-hover);
+  background: var(--primary-subtle);
+  border-color: var(--primary-border);
 }
 
 .status-pill--shipped {
-  color: #64cf8c;
-  background: rgba(62, 190, 111, 0.1);
-  border-color: rgba(62, 190, 111, 0.19);
+  color: var(--success);
+  background: var(--success-subtle);
+  border-color: var(--success-border);
 }
 
 .status-pill--conflicting,
 .status-pill--checksFailed,
 .status-pill--diverged {
-  color: #ff8f8f;
-  background: rgba(255, 85, 85, 0.1);
-  border-color: rgba(255, 85, 85, 0.22);
+  color: var(--danger);
+  background: var(--danger-subtle);
+  border-color: var(--danger-border);
 }
 
 .work-header__actions {

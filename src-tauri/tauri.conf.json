@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "ShipYard",
+  "productName": "Shipyard",
   "version": "0.1.0",
   "identifier": "com.alexanderheffernan.shipyard",
   "build": {
@@ -13,7 +13,7 @@
     "macOSPrivateApi": true,
     "windows": [
       {
-        "title": "ShipYard",
+        "title": "Shipyard",
         "width": 800,
         "height": 600,
         "hiddenTitle": true,

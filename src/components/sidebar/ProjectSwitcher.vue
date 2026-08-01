@@ -166,10 +166,10 @@ onBeforeUnmount(() => {
   width: 244px;
   overflow: hidden;
   color: var(--text-primary);
-  background: var(--surface-content);
-  border: 1px solid rgba(255, 255, 255, 0.13);
+  background: var(--surface-elevated);
+  border: 1px solid var(--border-strong);
   border-radius: 10px;
-  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.42);
+  box-shadow: var(--shadow-elevated);
   transform-origin: top left;
 }
 
@@ -182,7 +182,7 @@ onBeforeUnmount(() => {
   padding: 10px 14px;
   font-size: 11px;
   line-height: 1.4;
-  color: #ff9b9b;
+  color: var(--danger);
   border-bottom: 1px solid var(--border-subtle);
 }
 
