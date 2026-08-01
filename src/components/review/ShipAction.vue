@@ -95,4 +95,20 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeMenu));
 .ship-menu button { width: 100%; min-height: 30px; padding: 5px 8px; font: inherit; font-size: 11px; color: var(--text-primary); text-align: left; background: transparent; border: 0; border-radius: 5px; }
 .ship-menu button:hover { background: var(--surface-hover); }
 .ship-menu p { margin: 0; padding: 7px; font-size: 10px; color: var(--danger); }
+
+@media (max-width: 680px) {
+  .ship-control > button {
+    width: 26px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .ship-control > button span {
+    display: none;
+  }
+
+  .ship-control__menu-button {
+    width: 18px !important;
+  }
+}
 </style>

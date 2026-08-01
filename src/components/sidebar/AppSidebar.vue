@@ -64,6 +64,7 @@ const sections = computed<WorkSection[]>(() => {
     },
   ];
 });
+const hasWorkItems = computed(() => sections.value.some((section) => section.items.length > 0));
 
 function clampWidth(width: number) {
   return Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, width));
@@ -124,11 +125,7 @@ onBeforeUnmount(stopResize);
   >
     <div class="sidebar__body" :style="{ width: `${width}px` }">
       <nav class="sidebar__content" aria-label="Work">
-        <div v-if="sections.every((section) => section.items.length === 0)" class="sidebar__empty">
-          <strong>Everything is shipped</strong>
-          <span>Local work and open pull requests will appear here.</span>
-        </div>
-        <section v-for="section in sections" :key="section.id" class="work-section">
+        <section v-for="section in hasWorkItems ? sections : []" :key="section.id" class="work-section">
           <button
             class="work-section__header"
             type="button"
@@ -249,29 +246,6 @@ onBeforeUnmount(stopResize);
   margin-top: 8px;
   padding-top: 8px;
   border-top: 1px solid var(--border-subtle);
-}
-
-.sidebar__empty {
-  display: flex;
-  min-height: 180px;
-  align-items: center;
-  justify-content: center;
-  flex-direction: column;
-  gap: 6px;
-  padding: 24px;
-  color: var(--text-secondary);
-  text-align: center;
-}
-
-.sidebar__empty strong {
-  font-size: 12px;
-  font-weight: 550;
-  color: var(--text-primary);
-}
-
-.sidebar__empty span {
-  font-size: 10px;
-  line-height: 1.45;
 }
 
 .work-section__header {
