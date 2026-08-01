@@ -5,8 +5,10 @@ import WorkItemPanel from './components/review/WorkItemPanel.vue';
 import ProjectSettingsModal from './components/settings/ProjectSettingsModal.vue';
 import AppSidebar from './components/sidebar/AppSidebar.vue';
 import ProjectSwitcher from './components/sidebar/ProjectSwitcher.vue';
+import ConfirmationDialog from './components/ui/ConfirmationDialog.vue';
 import { useProjects } from './composables/useProjects';
-import type { Project } from './types/projects';
+import { deleteWorkItem, inspectWorkItemDeletion } from './services/projects';
+import type { DeleteWorkItemRequest, DeletionPlan, Project, WorkItem } from './types/projects';
 
 const sidebarOpen = ref(true);
 const sidebarWidth = ref(288);
@@ -14,6 +16,15 @@ const selectedWorkItemId = ref<string | null>(null);
 const settingsProject = ref<Project | null>(null);
 const settingsSection = ref<'open' | 'run'>('run');
 const appSettingsOpen = ref(false);
+const deletion = ref<{
+  project: Project;
+  item: WorkItem;
+  request: DeleteWorkItemRequest;
+  plan: DeletionPlan | null;
+  inspecting: boolean;
+  deleting: boolean;
+  error: string | null;
+} | null>(null);
 const {
   projects,
   loading,
@@ -47,6 +58,74 @@ function openProjectSettings(projectId: string) {
   const project = projects.value.find((candidate) => candidate.id === projectId);
   if (project) openSettings(project);
 }
+
+function message(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+async function openDeletion(workItemId: string) {
+  const project = projects.value.find((candidate) => candidate.workItems.some((item) => item.id === workItemId));
+  const item = project?.workItems.find((candidate) => candidate.id === workItemId);
+  if (!project || !item) return;
+  const request: DeleteWorkItemRequest = {
+    projectPath: project.path,
+    projectId: project.id,
+    workItemId: item.id,
+    branch: item.branch,
+    worktreePath: item.worktreePath,
+    headSha: item.headSha,
+  };
+  const current = { project, item, request, plan: null as DeletionPlan | null, inspecting: true, deleting: false, error: null as string | null };
+  deletion.value = current;
+  try {
+    const plan = await inspectWorkItemDeletion(request);
+    if (deletion.value === current) current.plan = plan;
+  } catch (inspectError) {
+    if (deletion.value === current) current.error = message(inspectError);
+  } finally {
+    if (deletion.value === current) current.inspecting = false;
+  }
+}
+
+async function confirmDeletion() {
+  const current = deletion.value;
+  if (!current?.plan || current.inspecting || current.deleting) return;
+  current.deleting = true;
+  current.error = null;
+  try {
+    const result = await deleteWorkItem(current.request, current.plan);
+    if (selectedWorkItemId.value === result.workItemId) selectedWorkItemId.value = null;
+    await rescanProject(result.projectId);
+    deletion.value = null;
+  } catch (deleteError) {
+    current.error = message(deleteError);
+    current.deleting = false;
+  }
+}
+
+const deletionTitle = computed(() => deletion.value?.item.branch
+  ? `Delete ${deletion.value.item.branch}?`
+  : 'Delete detached worktree?');
+const deletionDescription = computed(() => {
+  const plan = deletion.value?.plan;
+  if (!plan) return 'ShipYard is validating this work item against the current repository state.';
+  if (plan.switchesPrimaryCheckout) {
+    return `ShipYard will switch the primary checkout to ${plan.defaultBranch} and permanently delete the local branch ${plan.branch}.`;
+  }
+  if (plan.removesWorktree && plan.deletesBranch) {
+    return `ShipYard will permanently remove this linked worktree from disk and delete the local branch ${plan.branch}.`;
+  }
+  if (plan.removesWorktree) return 'ShipYard will permanently remove this detached linked worktree from disk.';
+  return `ShipYard will permanently delete the local branch ${plan.branch}.`;
+});
+const deletionConfirmLabel = computed(() => {
+  const plan = deletion.value?.plan;
+  if (!plan) return 'Delete work item';
+  if (plan.switchesPrimaryCheckout) return 'Switch and delete branch';
+  if (plan.removesWorktree && plan.deletesBranch) return 'Delete branch and worktree';
+  if (plan.removesWorktree) return 'Delete worktree';
+  return 'Delete local branch';
+});
 </script>
 
 <template>
@@ -84,6 +163,7 @@ function openProjectSettings(projectId: string) {
       :projects="projects"
       :selected-work-item-id="selectedWorkItemId"
       @select="selectedWorkItemId = $event"
+      @delete="openDeletion"
       @settings="appSettingsOpen = true"
     />
 
@@ -104,6 +184,35 @@ function openProjectSettings(projectId: string) {
       @close="settingsProject = null"
     />
     <AppSettingsModal v-if="appSettingsOpen" @close="appSettingsOpen = false" />
+    <ConfirmationDialog
+      v-if="deletion"
+      :title="deletionTitle"
+      :description="deletionDescription"
+      :confirm-label="deletionConfirmLabel"
+      :confirm-disabled="deletion.inspecting || !deletion.plan"
+      :loading="deletion.deleting"
+      loading-label="Deleting"
+      :error="deletion.error"
+      @cancel="deletion = null"
+      @confirm="confirmDeletion"
+    >
+      <template v-if="deletion.plan">
+        <p v-if="deletion.plan.worktreePath">
+          Worktree: <code>{{ deletion.plan.worktreePath }}</code>
+        </p>
+        <ul v-if="deletion.plan.hasUncommittedChanges || deletion.plan.unpushedCommits > 0">
+          <li v-if="deletion.plan.hasUncommittedChanges">
+            Uncommitted files in this worktree will be permanently lost.
+          </li>
+          <li v-if="deletion.plan.unpushedCommits > 0">
+            {{ deletion.plan.unpushedCommits }} unpushed local commit{{ deletion.plan.unpushedCommits === 1 ? '' : 's' }} unique to this work item will become unreachable.
+          </li>
+        </ul>
+        <p class="deletion-remote-note">
+          {{ deletion.item.pullRequest ? 'The GitHub pull request and its remote branch will remain untouched.' : 'Remote branches will remain untouched.' }}
+        </p>
+      </template>
+    </ConfirmationDialog>
   </div>
 </template>
 
@@ -122,6 +231,10 @@ function openProjectSettings(projectId: string) {
   min-width: 0;
   overflow: hidden;
   background: var(--surface-content);
+}
+
+.deletion-remote-note {
+  margin-top: 12px !important;
 }
 
 .window-drag-region {

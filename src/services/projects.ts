@@ -1,7 +1,12 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { open } from '@tauri-apps/plugin-dialog';
-import type { ScannedProject } from '../types/projects';
+import type {
+  DeleteWorkItemRequest,
+  DeletionPlan,
+  DeletionResult,
+  ScannedProject,
+} from '../types/projects';
 
 export async function chooseProjectDirectory() {
   const selected = await open({
@@ -15,6 +20,14 @@ export async function chooseProjectDirectory() {
 
 export function scanProject(path: string) {
   return invoke<ScannedProject>('scan_project', { path });
+}
+
+export function inspectWorkItemDeletion(request: DeleteWorkItemRequest) {
+  return invoke<DeletionPlan>('inspect_work_item_deletion', { request });
+}
+
+export function deleteWorkItem(request: DeleteWorkItemRequest, confirmedPlan: DeletionPlan) {
+  return invoke<DeletionResult>('delete_work_item', { request, confirmedPlan });
 }
 
 export function startProjectWatch(path: string) {

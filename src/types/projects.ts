@@ -44,3 +44,33 @@ export type ScannedProject = {
 export type Project = ScannedProject & {
   color: string;
 };
+
+export type DeleteWorkItemRequest = {
+  projectPath: string;
+  projectId: string;
+  workItemId: string;
+  branch: string | null;
+  worktreePath: string | null;
+  headSha: string;
+};
+
+export type DeletionPlan = {
+  projectId: string;
+  workItemId: string;
+  branch: string | null;
+  worktreePath: string | null;
+  defaultBranch: string | null;
+  removesWorktree: boolean;
+  deletesBranch: boolean;
+  switchesPrimaryCheckout: boolean;
+  hasUncommittedChanges: boolean;
+  unpushedCommits: number;
+};
+
+export type DeletionResult = {
+  projectId: string;
+  workItemId: string;
+  worktreeRemoved: boolean;
+  branchDeleted: boolean;
+  switchedPrimaryToDefault: boolean;
+};

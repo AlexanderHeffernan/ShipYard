@@ -1,4 +1,7 @@
-use super::{scan_project, validate_worktree, work_status::WorkStatus, worktree_paths};
+use super::{
+    delete_work_item, inspect_work_item_deletion, scan_project, validate_worktree,
+    work_item::WorkItem, work_status::WorkStatus, worktree_paths, DeleteWorkItemRequest, Project,
+};
 use std::{fs, path::Path, path::PathBuf, process::Command, time::SystemTime};
 
 #[test]
@@ -115,6 +118,194 @@ fn validates_only_the_exact_checkout_for_its_project() {
     fs::remove_dir_all(root).unwrap();
 }
 
+#[test]
+fn deletes_a_dirty_linked_worktree_and_its_local_branch() {
+    let root = committed_repository("delete-linked");
+    let linked = root.with_extension("delete-linked-worktree");
+    run(
+        &root,
+        &[
+            "worktree",
+            "add",
+            "-b",
+            "feature/delete-linked",
+            linked.to_str().unwrap(),
+            "main",
+        ],
+    );
+    fs::write(linked.join("uncommitted.txt"), "will be deleted\n").unwrap();
+
+    let (request, plan) = deletion_for_branch(&root, "feature/delete-linked");
+    assert!(plan.removes_worktree);
+    assert!(plan.deletes_branch);
+    assert!(plan.has_uncommitted_changes);
+    let result = delete_work_item(request, plan).unwrap();
+
+    assert!(result.worktree_removed);
+    assert!(result.branch_deleted);
+    assert!(!linked.exists());
+    assert!(!ref_exists(&root, "refs/heads/feature/delete-linked"));
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn deletes_a_detached_linked_worktree_without_deleting_a_branch() {
+    let root = committed_repository("delete-detached");
+    let linked = root.with_extension("delete-detached-worktree");
+    run(
+        &root,
+        &[
+            "worktree",
+            "add",
+            "--detach",
+            linked.to_str().unwrap(),
+            "main",
+        ],
+    );
+    fs::write(linked.join("detached.txt"), "uncommitted\n").unwrap();
+    let project = scan_project(root.to_str().unwrap()).unwrap();
+    let item = project
+        .work_items
+        .iter()
+        .find(|item| item.branch.is_none())
+        .unwrap();
+    let request = deletion_request(&project, item);
+    let plan = inspect_work_item_deletion(request.clone()).unwrap();
+    assert!(plan.removes_worktree);
+    assert!(!plan.deletes_branch);
+    assert!(plan.has_uncommitted_changes);
+
+    let result = delete_work_item(request, plan).unwrap();
+    assert!(result.worktree_removed);
+    assert!(!result.branch_deleted);
+    assert!(!linked.exists());
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn deletes_an_unchecked_out_local_branch_only() {
+    let root = committed_repository("delete-branch-only");
+    run(&root, &["branch", "feature/branch-only"]);
+    let (request, plan) = deletion_for_branch(&root, "feature/branch-only");
+    assert!(!plan.removes_worktree);
+    assert!(plan.deletes_branch);
+
+    let result = delete_work_item(request, plan).unwrap();
+    assert!(!result.worktree_removed);
+    assert!(result.branch_deleted);
+    assert!(!ref_exists(&root, "refs/heads/feature/branch-only"));
+    assert!(root.exists());
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn refuses_to_delete_the_default_branch() {
+    let root = committed_repository("refuse-default");
+    fs::write(root.join("dirty.txt"), "keep me\n").unwrap();
+    let project = scan_project(root.to_str().unwrap()).unwrap();
+    let item = project
+        .work_items
+        .iter()
+        .find(|item| item.branch.as_deref() == Some("main"))
+        .unwrap();
+
+    let error = inspect_work_item_deletion(deletion_request(&project, item)).unwrap_err();
+    assert!(error.contains("default branch"));
+    assert!(root.join("dirty.txt").exists());
+    assert!(ref_exists(&root, "refs/heads/main"));
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn refuses_a_dirty_primary_checkout_on_a_feature_branch() {
+    let root = committed_repository("refuse-dirty-primary");
+    run(&root, &["switch", "-c", "feature/dirty-primary"]);
+    fs::write(root.join("dirty.txt"), "keep me\n").unwrap();
+    let project = scan_project(root.to_str().unwrap()).unwrap();
+    let item = project
+        .work_items
+        .iter()
+        .find(|item| item.branch.as_deref() == Some("feature/dirty-primary"))
+        .unwrap();
+
+    let error = inspect_work_item_deletion(deletion_request(&project, item)).unwrap_err();
+    assert!(error.contains("primary checkout has uncommitted changes"));
+    assert_eq!(current_branch(&root), "feature/dirty-primary");
+    assert!(root.join("dirty.txt").exists());
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn switches_a_clean_primary_checkout_before_deleting_its_feature_branch() {
+    let root = committed_repository("delete-clean-primary");
+    run(&root, &["switch", "-c", "feature/clean-primary"]);
+    fs::write(root.join("feature.txt"), "feature\n").unwrap();
+    run(&root, &["add", "feature.txt"]);
+    run(&root, &["commit", "-m", "Feature commit"]);
+    let (request, plan) = deletion_for_branch(&root, "feature/clean-primary");
+    assert!(plan.switches_primary_checkout);
+    assert!(!plan.removes_worktree);
+
+    let result = delete_work_item(request, plan).unwrap();
+    assert!(result.switched_primary_to_default);
+    assert!(result.branch_deleted);
+    assert_eq!(current_branch(&root), "main");
+    assert!(root.exists());
+    assert!(!ref_exists(&root, "refs/heads/feature/clean-primary"));
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn refuses_a_stale_or_mismatched_work_item_identity() {
+    let root = committed_repository("refuse-stale");
+    run(&root, &["branch", "feature/stale"]);
+    let project = scan_project(root.to_str().unwrap()).unwrap();
+    let item = project
+        .work_items
+        .iter()
+        .find(|item| item.branch.as_deref() == Some("feature/stale"))
+        .unwrap();
+    let mut request = deletion_request(&project, item);
+    request.work_item_id = format!("{}::branch::refs/heads/feature/other", project.id);
+
+    let error = inspect_work_item_deletion(request).unwrap_err();
+    assert!(error.contains("identity does not match"));
+    assert!(ref_exists(&root, "refs/heads/feature/stale"));
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn reports_uncommitted_and_unique_unpushed_work_for_confirmation() {
+    let root = committed_repository("deletion-loss-summary");
+    let linked = root.with_extension("deletion-loss-worktree");
+    run(
+        &root,
+        &[
+            "worktree",
+            "add",
+            "-b",
+            "feature/loss-summary",
+            linked.to_str().unwrap(),
+            "main",
+        ],
+    );
+    fs::write(linked.join("committed.txt"), "unique commit\n").unwrap();
+    run(&linked, &["add", "committed.txt"]);
+    run(&linked, &["commit", "-m", "Unique local commit"]);
+    fs::write(linked.join("uncommitted.txt"), "unique file\n").unwrap();
+
+    let (_, plan) = deletion_for_branch(&root, "feature/loss-summary");
+    assert!(plan.has_uncommitted_changes);
+    assert_eq!(plan.unpushed_commits, 1);
+
+    run(
+        &root,
+        &["worktree", "remove", "--force", linked.to_str().unwrap()],
+    );
+    run(&root, &["branch", "-D", "feature/loss-summary"]);
+    fs::remove_dir_all(root).unwrap();
+}
+
 fn assert_branch_status(root: &Path, branch: &str, expected: WorkStatus) {
     let project = scan(root.to_str().unwrap()).unwrap();
     let item = project
@@ -127,6 +318,49 @@ fn assert_branch_status(root: &Path, branch: &str, expected: WorkStatus) {
 
 fn scan(path: &str) -> Result<super::Project, String> {
     scan_project(path)
+}
+
+fn deletion_for_branch(root: &Path, branch: &str) -> (DeleteWorkItemRequest, super::DeletionPlan) {
+    let project = scan_project(root.to_str().unwrap()).unwrap();
+    let item = project
+        .work_items
+        .iter()
+        .find(|item| item.branch.as_deref() == Some(branch))
+        .unwrap();
+    let request = deletion_request(&project, item);
+    let plan = inspect_work_item_deletion(request.clone()).unwrap();
+    (request, plan)
+}
+
+fn deletion_request(project: &Project, item: &WorkItem) -> DeleteWorkItemRequest {
+    DeleteWorkItemRequest {
+        project_path: project.path.clone(),
+        project_id: project.id.clone(),
+        work_item_id: item.id.clone(),
+        branch: item.branch.clone(),
+        worktree_path: item.worktree_path.clone(),
+        head_sha: item.head_sha.clone(),
+    }
+}
+
+fn ref_exists(root: &Path, reference: &str) -> bool {
+    Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(["show-ref", "--verify", "--quiet", reference])
+        .status()
+        .unwrap()
+        .success()
+}
+
+fn current_branch(root: &Path) -> String {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(["branch", "--show-current"])
+        .output()
+        .unwrap();
+    String::from_utf8(output.stdout).unwrap().trim().to_owned()
 }
 
 fn committed_repository(label: &str) -> PathBuf {

@@ -2,6 +2,7 @@ mod base_branch;
 mod branch;
 mod branch_reader;
 mod command;
+mod deletion;
 mod diff;
 mod diff_stats;
 mod project;
@@ -13,6 +14,8 @@ mod work_status;
 mod worktree;
 mod worktree_reader;
 
+pub use deletion::{delete as delete_work_item, inspect as inspect_work_item_deletion};
+pub use deletion::{DeleteWorkItemRequest, DeletionPlan, DeletionResult};
 pub use project::Project;
 pub(crate) use references::ahead_behind;
 pub(crate) use repository::validate_worktree;

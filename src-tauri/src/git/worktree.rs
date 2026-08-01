@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub(super) struct Worktree {
     pub(super) path: PathBuf,
     pub(super) sha: String,

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Settings } from '@lucide/vue';
+import { Settings, Trash2 } from '@lucide/vue';
 import { computed, onBeforeUnmount, ref } from 'vue';
 import AppButton from '../ui/AppButton.vue';
 import type { Project, WorkItem } from '../../types/projects';
@@ -14,6 +14,7 @@ type SidebarWorkItem = WorkItem & {
   color: string;
   projectName: string;
   syncState: PullRequestSyncState | null;
+  deletable: boolean;
 };
 
 type WorkSection = {
@@ -34,6 +35,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   'update:width': [value: number];
   select: [id: string];
+  delete: [id: string];
   settings: [];
 }>();
 
@@ -48,6 +50,7 @@ const sections = computed<WorkSection[]>(() => {
       color: project.color,
       projectName: project.name,
       syncState: pullRequestSyncState(item),
+      deletable: item.branch ? item.branch !== project.defaultBranch : item.worktreePath !== project.path,
     })),
   );
 
@@ -142,19 +145,34 @@ onBeforeUnmount(stopResize);
           </button>
 
           <div v-if="!collapsedSections.has(section.id)" class="work-section__items">
-            <button
+            <div
               v-for="item in section.items"
               :key="item.id"
               class="work-item"
               :class="{ 'work-item--selected': item.id === selectedWorkItemId }"
-              type="button"
-              :title="`${item.projectName} · ${item.lastCommitSubject || item.title}`"
-              @click="emit('select', item.id)"
             >
-              <span class="work-item__dot" :style="{ background: item.color }"></span>
-              <span class="work-item__title">{{ item.title }}</span>
-              <span class="work-item__meta" :class="{ 'work-item__meta--attention': item.syncState && item.syncState !== 'synced', 'work-item__meta--danger': item.syncState === 'diverged' }">{{ item.meta }}</span>
-            </button>
+              <button
+                class="work-item__select"
+                type="button"
+                :aria-current="item.id === selectedWorkItemId ? 'page' : undefined"
+                :title="`${item.projectName} · ${item.lastCommitSubject || item.title}`"
+                @click="emit('select', item.id)"
+              >
+                <span class="work-item__dot" :style="{ background: item.color }"></span>
+                <span class="work-item__title">{{ item.title }}</span>
+                <span class="work-item__meta" :class="{ 'work-item__meta--attention': item.syncState && item.syncState !== 'synced', 'work-item__meta--danger': item.syncState === 'diverged' }">{{ item.meta }}</span>
+              </button>
+              <button
+                v-if="item.deletable"
+                class="work-item__delete"
+                type="button"
+                :aria-label="`Delete ${item.title}`"
+                :title="`Delete ${item.title}`"
+                @click="emit('delete', item.id)"
+              >
+                <Trash2 aria-hidden="true" />
+              </button>
+            </div>
           </div>
         </section>
       </nav>
@@ -292,7 +310,8 @@ onBeforeUnmount(stopResize);
 }
 
 .work-section__header:focus-visible,
-.work-item:focus-visible,
+.work-item__select:focus-visible,
+.work-item__delete:focus-visible,
 .sidebar__resize-handle:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 1px;
@@ -317,6 +336,12 @@ onBeforeUnmount(stopResize);
 }
 
 .work-item {
+  position: relative;
+  height: 39px;
+  border-radius: 6px;
+}
+
+.work-item__select {
   display: grid;
   grid-template-columns: 10px minmax(0, 1fr) auto;
   gap: 10px;
@@ -333,7 +358,8 @@ onBeforeUnmount(stopResize);
   border-radius: 6px;
 }
 
-.work-item:hover {
+.work-item:hover,
+.work-item:focus-within {
   background: var(--surface-hover);
 }
 
@@ -355,8 +381,50 @@ onBeforeUnmount(stopResize);
 }
 
 .work-item__meta {
+  transition: opacity 100ms ease;
   color: var(--text-secondary);
   white-space: nowrap;
+}
+
+.work-item__delete {
+  position: absolute;
+  top: 5px;
+  right: 3px;
+  display: grid;
+  width: 29px;
+  height: 29px;
+  padding: 0;
+  place-items: center;
+  color: #ff9292;
+  visibility: hidden;
+  background: #252127;
+  border: 0;
+  border-radius: 5px;
+  opacity: 0;
+  transition: color 100ms ease, background 100ms ease, opacity 100ms ease;
+}
+
+.work-item__delete svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 1.7;
+}
+
+.work-item:hover .work-item__meta,
+.work-item:focus-within .work-item__meta {
+  opacity: 0;
+}
+
+.work-item:hover .work-item__delete,
+.work-item:focus-within .work-item__delete,
+.work-item__delete:focus {
+  visibility: visible;
+  opacity: 1;
+}
+
+.work-item__delete:hover {
+  color: #ffb0b0;
+  background: rgba(255, 100, 100, 0.14);
 }
 
 .work-item__meta--attention {

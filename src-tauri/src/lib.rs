@@ -48,6 +48,25 @@ async fn scan_project(path: String) -> Result<git::Project, String> {
 }
 
 #[tauri::command]
+async fn inspect_work_item_deletion(
+    request: git::DeleteWorkItemRequest,
+) -> Result<git::DeletionPlan, String> {
+    tauri::async_runtime::spawn_blocking(move || git::inspect_work_item_deletion(request))
+        .await
+        .map_err(|error| format!("work item inspection failed: {error}"))?
+}
+
+#[tauri::command]
+async fn delete_work_item(
+    request: git::DeleteWorkItemRequest,
+    confirmed_plan: git::DeletionPlan,
+) -> Result<git::DeletionResult, String> {
+    tauri::async_runtime::spawn_blocking(move || git::delete_work_item(request, confirmed_plan))
+        .await
+        .map_err(|error| format!("work item deletion failed: {error}"))?
+}
+
+#[tauri::command]
 async fn get_github_status() -> Result<github::GitHubStatus, String> {
     tauri::async_runtime::spawn_blocking(github::status)
         .await
@@ -208,6 +227,8 @@ pub fn run() {
             get_agent_configuration,
             save_agent_settings,
             scan_project,
+            inspect_work_item_deletion,
+            delete_work_item,
             get_github_status,
             get_open_settings,
             save_open_application,
