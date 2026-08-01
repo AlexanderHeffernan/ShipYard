@@ -395,9 +395,9 @@ onBeforeUnmount(stopResize);
   height: 29px;
   padding: 0;
   place-items: center;
-  color: #ff9292;
+  color: var(--danger);
   visibility: hidden;
-  background: #252127;
+  background: var(--surface-elevated);
   border: 0;
   border-radius: 5px;
   opacity: 0;
@@ -423,8 +423,8 @@ onBeforeUnmount(stopResize);
 }
 
 .work-item__delete:hover {
-  color: #ffb0b0;
-  background: rgba(255, 100, 100, 0.14);
+  color: var(--danger);
+  background: var(--danger-subtle);
 }
 
 .work-item__meta--attention {

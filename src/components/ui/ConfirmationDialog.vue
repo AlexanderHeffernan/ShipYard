@@ -114,17 +114,17 @@ onBeforeUnmount(() => {
   display: grid;
   padding: 24px;
   place-items: center;
-  background: rgba(0, 0, 0, 0.58);
+  background: var(--surface-scrim);
   backdrop-filter: blur(5px);
 }
 
 .confirmation-dialog {
   width: min(440px, calc(100vw - 32px));
   overflow: hidden;
-  background: #15161b;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: var(--surface-elevated);
+  border: 1px solid var(--border-strong);
   border-radius: 12px;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.58);
+  box-shadow: 0 24px 80px rgba(5, 3, 8, 0.6);
 }
 
 .confirmation-dialog header {
@@ -169,9 +169,9 @@ onBeforeUnmount(() => {
 .confirmation-dialog__error {
   margin-top: 13px !important;
   padding: 9px 10px;
-  color: #ffaaaa;
-  background: rgba(255, 100, 100, 0.08);
-  border: 1px solid rgba(255, 100, 100, 0.2);
+  color: var(--danger);
+  background: var(--danger-subtle);
+  border: 1px solid var(--danger-border);
   border-radius: 6px;
 }
 
@@ -180,20 +180,20 @@ onBeforeUnmount(() => {
   justify-content: flex-end;
   gap: 8px;
   padding: 12px 16px;
-  background: rgba(255, 255, 255, 0.018);
+  background: var(--surface-subtle);
   border-top: 1px solid var(--border-subtle);
 }
 
 .confirmation-dialog footer :deep(.app-button--danger) {
-  color: #fff0f0;
-  background: #b83d45;
-  border-color: #cc4a52;
+  color: var(--danger);
+  background: var(--danger-subtle);
+  border-color: var(--danger-border);
 }
 
 .confirmation-dialog footer :deep(.app-button--danger:hover:not(:disabled)) {
-  color: white;
-  background: #c7464f;
-  border-color: #dc5960;
+  color: var(--danger);
+  background: var(--danger-subtle);
+  border-color: var(--danger);
 }
 
 @media (max-width: 520px) {
