@@ -84,6 +84,7 @@ export function useRunner() {
       const { runId } = await startShipping(project, item, action);
       const labels: Record<ShippingAction, string> = {
         createPullRequest: 'Creating pull request',
+        updatePullRequest: 'Updating pull request',
         mergePullRequest: 'Merging pull request',
         directToMain: 'Shipping directly to main',
       };

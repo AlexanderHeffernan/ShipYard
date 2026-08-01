@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRunner } from '../../composables/useRunner';
 import type { Project, WorkItem } from '../../types/projects';
+import { pullRequestSyncState } from '../../utils/workItems';
 
 const props = defineProps<{ project: Project; workItem: WorkItem }>();
 const emit = defineEmits<{ refresh: [] }>();
@@ -12,12 +13,17 @@ const refreshedRunId = ref<string | null>(null);
 
 const active = computed(() => currentRun.value?.kind === 'ship' && currentRun.value.workItemId === props.workItem.id && ['running', 'stopping'].includes(currentRun.value.status));
 const anotherRunActive = computed(() => !!currentRun.value && ['running', 'stopping'].includes(currentRun.value.status) && !active.value);
-const blocked = computed(() => !!props.workItem.pullRequest && ['checksPending', 'checksFailed', 'reviewRequired', 'draft'].includes(props.workItem.pullRequest.mergeState));
+const syncState = computed(() => pullRequestSyncState(props.workItem));
+const needsUpdate = computed(() => !!syncState.value && syncState.value !== 'synced');
+const blocked = computed(() => !!props.workItem.pullRequest && !needsUpdate.value && ['checksPending', 'checksFailed', 'reviewRequired', 'draft'].includes(props.workItem.pullRequest.mergeState));
 const primaryLabel = computed(() => {
   if (active.value && currentRun.value?.status === 'stopping') return 'Stopping…';
   if (active.value) return 'Stop';
   const pullRequest = props.workItem.pullRequest;
   if (!pullRequest) return 'Create PR';
+  if (syncState.value === 'remoteAhead') return 'Sync checkout';
+  if (syncState.value === 'diverged') return 'Reconcile PR';
+  if (needsUpdate.value) return 'Update PR';
   if (pullRequest.mergeState === 'conflicting') return 'Resolve & merge';
   if (pullRequest.mergeState === 'checksPending') return 'Waiting for checks';
   if (pullRequest.mergeState === 'checksFailed') return 'Checks failed';
@@ -25,12 +31,17 @@ const primaryLabel = computed(() => {
   if (pullRequest.mergeState === 'draft') return 'Draft PR';
   return 'Merge PR';
 });
-const unavailable = computed(() => !props.workItem.branch || !props.project.defaultBranch || !props.project.githubRepository || (!props.workItem.pullRequest && !props.workItem.worktreePath));
+const unavailable = computed(() => !props.workItem.branch || !props.project.defaultBranch || !props.project.githubRepository || ((!props.workItem.pullRequest || needsUpdate.value) && !props.workItem.worktreePath));
 
 async function primary() {
   if (active.value) return cancel();
   if (blocked.value || unavailable.value || anotherRunActive.value) return;
-  await shipWork(props.project, props.workItem, props.workItem.pullRequest ? 'mergePullRequest' : 'createPullRequest');
+  const action = !props.workItem.pullRequest
+    ? 'createPullRequest'
+    : needsUpdate.value
+      ? 'updatePullRequest'
+      : 'mergePullRequest';
+  await shipWork(props.project, props.workItem, action);
 }
 
 async function directToMain() {
@@ -55,7 +66,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeMenu));
 
 <template>
   <div ref="root" class="ship-control">
-    <button class="ship-control__main" :class="{ 'ship-control__main--single': workItem.pullRequest }" type="button" :disabled="anotherRunActive || blocked || unavailable" :title="unavailable ? 'Local shipping requires a checked-out branch connected to GitHub' : primaryLabel" @click="primary">
+    <button class="ship-control__main" :class="{ 'ship-control__main--single': workItem.pullRequest }" type="button" :disabled="anotherRunActive || blocked || unavailable" :title="unavailable ? (needsUpdate ? 'Check out this branch before updating its pull request' : 'Local shipping requires a checked-out branch connected to GitHub') : primaryLabel" @click="primary">
       <svg viewBox="0 0 16 16" aria-hidden="true"><path v-if="active" d="M4.5 4.5h7v7h-7z"/><path v-else d="M2.5 9.5h11l-2 3h-7l-2-3Zm3-1V3.5l5 2.5-5 2.5Z"/></svg>
       <span>{{ primaryLabel }}</span>
     </button>

@@ -14,6 +14,7 @@ mod worktree;
 mod worktree_reader;
 
 pub use project::Project;
+pub(crate) use references::ahead_behind;
 pub(crate) use repository::validate_worktree;
 pub(crate) use repository::{belongs_to_project, resolve};
 pub use scanner::scan_project;

@@ -3,7 +3,7 @@ import { Settings } from '@lucide/vue';
 import { computed, onBeforeUnmount, ref } from 'vue';
 import AppButton from '../ui/AppButton.vue';
 import type { Project, WorkItem } from '../../types/projects';
-import { workItemMeta, workItemTitle } from '../../utils/workItems';
+import { pullRequestSyncState, workItemMeta, workItemTitle, type PullRequestSyncState } from '../../utils/workItems';
 
 const MIN_WIDTH = 224;
 const MAX_WIDTH = 420;
@@ -13,6 +13,7 @@ type SidebarWorkItem = WorkItem & {
   meta: string;
   color: string;
   projectName: string;
+  syncState: PullRequestSyncState | null;
 };
 
 type WorkSection = {
@@ -46,6 +47,7 @@ const sections = computed<WorkSection[]>(() => {
       meta: workItemMeta(item),
       color: project.color,
       projectName: project.name,
+      syncState: pullRequestSyncState(item),
     })),
   );
 
@@ -154,7 +156,7 @@ onBeforeUnmount(stopResize);
             >
               <span class="work-item__dot" :style="{ background: item.color }"></span>
               <span class="work-item__title">{{ item.title }}</span>
-              <span class="work-item__meta">{{ item.meta }}</span>
+              <span class="work-item__meta" :class="{ 'work-item__meta--attention': item.syncState && item.syncState !== 'synced', 'work-item__meta--danger': item.syncState === 'diverged' }">{{ item.meta }}</span>
             </button>
           </div>
         </section>
@@ -381,6 +383,14 @@ onBeforeUnmount(stopResize);
 .work-item__meta {
   color: var(--text-secondary);
   white-space: nowrap;
+}
+
+.work-item__meta--attention {
+  color: #e7b950;
+}
+
+.work-item__meta--danger {
+  color: #ff8f8f;
 }
 
 .sidebar__resize-handle {

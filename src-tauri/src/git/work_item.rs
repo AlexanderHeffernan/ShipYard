@@ -11,6 +11,9 @@ pub(crate) struct PullRequest {
     pub(crate) mergeable: Option<bool>,
     pub(crate) merge_state: String,
     pub(crate) head_branch: String,
+    pub(crate) head_sha: String,
+    pub(crate) local_commits: u32,
+    pub(crate) remote_commits: u32,
 }
 
 #[derive(Serialize)]

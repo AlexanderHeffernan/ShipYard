@@ -24,6 +24,7 @@ pub(crate) struct ShippingRequest {
 #[serde(rename_all = "camelCase")]
 enum ShippingAction {
     CreatePullRequest,
+    UpdatePullRequest,
     MergePullRequest,
     DirectToMain,
 }
@@ -103,7 +104,7 @@ fn metadata_prompt_text(request: &ShippingRequest) -> String {
 
 fn conflict_prompt_text(request: &ShippingRequest) -> String {
     format!(
-        "Resolve the current Git merge conflicts between branch {branch} and origin/{base}. Inspect both sides and preserve their intended behavior. Edit only what is needed to resolve the merge. Run focused checks when useful. Do not commit, push, rebase, switch branches, or abort the merge. Finish only when every conflict is resolved and staged or ready to stage.",
+        "Resolve the current Git merge conflicts while bringing branch {branch} up to date with its remote work and origin/{base}. Inspect both sides and preserve their intended behavior. Edit only what is needed to resolve the merge. Run focused checks when useful. Do not commit, push, rebase, switch branches, or abort the merge. Finish only when every conflict is resolved and staged or ready to stage.",
         base = request.default_branch,
         branch = request.source_branch.as_deref().unwrap_or_default(),
     )
@@ -145,14 +146,16 @@ resolution={resolution}
 echo "ShipYard · checking local work"
 {checkout_guard}
 
-resolve_conflicts() {{
+integrate_target() {{
   local source_sha="$1"
+  local target="$2"
+  local reason="$3"
   mkdir -p "$(dirname "$resolution")"
   git -C "$source" worktree add --detach "$resolution" "$source_sha"
-  echo "ShipYard · branch conflicts with origin/$base"
-  echo "ShipYard · resolving automatically with {agent_label}"
-  if ! git -C "$resolution" merge --no-edit "origin/$base"; then
+  echo "ShipYard · $reason"
+  if ! git -C "$resolution" merge --no-edit "$target"; then
     [[ -n "$(git -C "$resolution" diff --name-only --diff-filter=U)" ]]
+    echo "ShipYard · resolving automatically with {agent_label}"
     (cd "$resolution" && {conflict_command})
   fi
   if [[ -n "$(git -C "$resolution" diff --name-only --diff-filter=U)" ]]; then
@@ -171,7 +174,7 @@ resolve_conflicts() {{
     git -C "$source" merge --ff-only "$RESOLVED_SHA"
   fi
   git -C "$source" worktree remove "$resolution"
-  echo "ShipYard · conflicts resolved"
+  echo "ShipYard · remote work integrated"
 }}
 "#,
         source = shell(source),
@@ -189,8 +192,11 @@ resolve_conflicts() {{
     );
 
     let action = match request.action {
-        ShippingAction::CreatePullRequest | ShippingAction::DirectToMain => format!(
+        ShippingAction::CreatePullRequest
+        | ShippingAction::UpdatePullRequest
+        | ShippingAction::DirectToMain => format!(
             r#"
+{metadata_guard}
 echo "ShipYard · asking {agent_label} to describe the change"
 ({metadata_command}) | tee {metadata}
 python3 - {metadata} {parsed} {subject} {body} {pr_title} {pr_body} <<'PY'
@@ -220,13 +226,26 @@ if ! git -C "$source" diff --cached --quiet; then
   {{ cat {subject}; echo; cat {body}; }} | git -C "$source" commit -F -
   echo "ShipYard · committed local work"
 fi
+{metadata_guard_end}
 [[ -z "$(git -C "$source" status --porcelain --untracked-files=normal)" ]]
-git -C "$source" fetch origin "$base"
+git -C "$source" fetch origin {fetch_targets}
 source_sha="$(git -C "$source" rev-parse HEAD)"
+{synchronize_pull_request}
 if ! git -C "$source" merge-tree --write-tree "$source_sha" "origin/$base" >/dev/null; then
-  resolve_conflicts "$source_sha"
+  integrate_target "$source_sha" "origin/$base" "branch conflicts with origin/$base"
+  source_sha="$RESOLVED_SHA"
 fi
 "#,
+            metadata_guard = if matches!(request.action, ShippingAction::UpdatePullRequest) {
+                "if [[ -n \"$(git -C \"$source\" status --porcelain --untracked-files=normal)\" ]]; then"
+            } else {
+                ""
+            },
+            metadata_guard_end = if matches!(request.action, ShippingAction::UpdatePullRequest) {
+                "fi"
+            } else {
+                ""
+            },
             agent_label = adapter.label(),
             metadata_command = metadata_command,
             metadata = shell(&metadata),
@@ -235,6 +254,21 @@ fi
             body = shell(&body),
             pr_title = shell(&pr_title),
             pr_body = shell(&pr_body),
+            fetch_targets = if matches!(request.action, ShippingAction::UpdatePullRequest) {
+                "\"$base\" \"$branch\""
+            } else {
+                "\"$base\""
+            },
+            synchronize_pull_request =
+                if matches!(request.action, ShippingAction::UpdatePullRequest) {
+                    r#"remote_sha="$(git -C "$source" rev-parse "origin/$branch")"
+if ! git -C "$source" merge-base --is-ancestor "$remote_sha" "$source_sha"; then
+  integrate_target "$source_sha" "$remote_sha" "local checkout and pull request need reconciliation"
+  source_sha="$RESOLVED_SHA"
+fi"#
+                } else {
+                    ""
+                },
         ),
         ShippingAction::MergePullRequest => {
             let number = request
@@ -243,9 +277,19 @@ fi
             format!(
                 r#"
 git -C "$source" fetch origin "$base" "$branch"
+if [[ "$(git -C "$source" branch --show-current)" == "$branch" ]] &&
+   [[ -n "$(git -C "$source" status --porcelain --untracked-files=normal)" ]]; then
+  echo "ShipYard · local changes are not in the pull request; update it before merging" >&2
+  exit 1
+fi
+local_sha="$(git -C "$source" rev-parse "refs/heads/$branch")"
 source_sha="$(git -C "$source" rev-parse "origin/$branch")"
+if [[ "$local_sha" != "$source_sha" ]]; then
+  echo "ShipYard · local commits are not synchronized with the pull request; update it before merging" >&2
+  exit 1
+fi
 if ! git -C "$source" merge-tree --write-tree "$source_sha" "origin/$base" >/dev/null; then
-  resolve_conflicts "$source_sha"
+  integrate_target "$source_sha" "origin/$base" "branch conflicts with origin/$base"
   git -C "$source" push origin "$RESOLVED_SHA:refs/heads/$branch"
 fi
 echo "ShipYard · merging pull request #{number}"
@@ -269,10 +313,15 @@ echo "ShipYard · pull request created"
             title = shell(&pr_title),
             body = shell(&pr_body),
         ),
+        ShippingAction::UpdatePullRequest => r#"
+git -C "$source" push origin "HEAD:$branch"
+echo "ShipYard · pull request updated"
+"#
+        .to_owned(),
         ShippingAction::DirectToMain => r#"
 source_sha="$(git -C "$source" rev-parse HEAD)"
 if ! git -C "$source" merge-base --is-ancestor "origin/$base" "$source_sha"; then
-  resolve_conflicts "$source_sha"
+  integrate_target "$source_sha" "origin/$base" "branch needs the latest origin/$base"
 fi
 echo "ShipYard · pushing the resolved commit directly to $base"
 git -C "$source" push origin "HEAD:$base"
@@ -376,22 +425,7 @@ mod tests {
         run(&checkout, &["switch", "feature/test"]);
         fs::write(checkout.join("work.txt"), "uncommitted\n").unwrap();
 
-        let agent = root.join("agent.sh");
-        fs::write(&agent, r###"#!/bin/zsh
-prompt="$(cat)"
-if [[ "$prompt" == *"Return ONLY"* ]]; then
-  printf '%s\n' '{"commitSubject":"Ship work","commitBody":"Prepared by the test agent.","pullRequestTitle":"Ship work","pullRequestBody":"Ship work"}'
-else
-  echo 'resolved' > conflict.txt
-  git add conflict.txt
-fi
-"###).unwrap();
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            fs::set_permissions(&agent, fs::Permissions::from_mode(0o700)).unwrap();
-        }
-        let adapter = TestAdapter { executable: agent };
+        let adapter = test_adapter(&root);
         let project_id = crate::git::resolve(checkout.to_str().unwrap())
             .unwrap()
             .1
@@ -434,6 +468,126 @@ fi
         );
         assert_eq!(text(&checkout, &["status", "--porcelain"]), "");
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn updating_a_pull_request_commits_and_pushes_local_work() {
+        let root = temporary("update-pr");
+        let remote = root.join("remote.git");
+        let checkout = root.join("checkout");
+        let data = root.join("data");
+        run(&root, &["init", "--bare", remote.to_str().unwrap()]);
+        run(
+            &root,
+            &[
+                "clone",
+                remote.to_str().unwrap(),
+                checkout.to_str().unwrap(),
+            ],
+        );
+        run(&checkout, &["switch", "-c", "main"]);
+        run(&checkout, &["config", "user.name", "ShipYard Test"]);
+        run(
+            &checkout,
+            &["config", "user.email", "shipyard@example.test"],
+        );
+        fs::write(checkout.join("README.md"), "initial\n").unwrap();
+        run(&checkout, &["add", "."]);
+        run(&checkout, &["commit", "-m", "Initial"]);
+        run(&checkout, &["push", "-u", "origin", "main"]);
+        run(&checkout, &["switch", "-c", "feature/update"]);
+        fs::write(checkout.join("feature.txt"), "first version\n").unwrap();
+        run(&checkout, &["add", "."]);
+        run(&checkout, &["commit", "-m", "Start feature"]);
+        run(&checkout, &["push", "-u", "origin", "feature/update"]);
+        let previous_pull_request_head = text(&checkout, &["rev-parse", "origin/feature/update"]);
+        fs::write(checkout.join("feature.txt"), "updated locally\n").unwrap();
+
+        let project_id = crate::git::resolve(checkout.to_str().unwrap())
+            .unwrap()
+            .1
+            .to_string_lossy()
+            .into_owned();
+        let adapter = test_adapter(&root);
+        let blocked_merge = prepare_with_adapter(
+            &data,
+            ShippingRequest {
+                project_id: project_id.clone(),
+                _work_item_id: "test-item".into(),
+                source_path: checkout.to_string_lossy().into_owned(),
+                source_branch: Some("feature/update".into()),
+                default_branch: "main".into(),
+                github_repository: "owner/repo".into(),
+                action: ShippingAction::MergePullRequest,
+                pull_request_number: Some(1),
+            },
+            &adapter,
+        )
+        .unwrap();
+        let blocked_output = Command::new("/bin/zsh")
+            .arg(blocked_merge.script_path)
+            .output()
+            .unwrap();
+        assert!(!blocked_output.status.success());
+        assert!(String::from_utf8_lossy(&blocked_output.stderr)
+            .contains("local changes are not in the pull request"));
+
+        let prepared = prepare_with_adapter(
+            &data,
+            ShippingRequest {
+                project_id,
+                _work_item_id: "test-item".into(),
+                source_path: checkout.to_string_lossy().into_owned(),
+                source_branch: Some("feature/update".into()),
+                default_branch: "main".into(),
+                github_repository: "owner/repo".into(),
+                action: ShippingAction::UpdatePullRequest,
+                pull_request_number: Some(1),
+            },
+            &adapter,
+        )
+        .unwrap();
+        let output = Command::new("/bin/zsh")
+            .arg(prepared.script_path)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        run(&checkout, &["fetch", "origin", "feature/update"]);
+        let updated_pull_request_head = text(&checkout, &["rev-parse", "origin/feature/update"]);
+        assert_ne!(previous_pull_request_head, updated_pull_request_head);
+        assert_eq!(
+            updated_pull_request_head,
+            text(&checkout, &["rev-parse", "HEAD"])
+        );
+        assert_eq!(text(&checkout, &["status", "--porcelain"]), "");
+        assert_eq!(
+            text(&checkout, &["show", "-s", "--format=%s", "HEAD"]),
+            "Ship work"
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    fn test_adapter(root: &Path) -> TestAdapter {
+        let agent = root.join("agent.sh");
+        fs::write(&agent, r###"#!/bin/zsh
+prompt="$(cat)"
+if [[ "$prompt" == *"Return ONLY"* ]]; then
+  printf '%s\n' '{"commitSubject":"Ship work","commitBody":"Prepared by the test agent.","pullRequestTitle":"Ship work","pullRequestBody":"Ship work"}'
+else
+  echo 'resolved' > conflict.txt
+  git add conflict.txt
+fi
+"###).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&agent, fs::Permissions::from_mode(0o700)).unwrap();
+        }
+        TestAdapter { executable: agent }
     }
 
     fn temporary(label: &str) -> std::path::PathBuf {

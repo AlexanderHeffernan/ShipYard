@@ -1,4 +1,4 @@
-use crate::git::{Project, PullRequest};
+use crate::git::{self, Project, PullRequest};
 use serde::{Deserialize, Serialize};
 use std::{path::Path, process::Command};
 
@@ -116,7 +116,13 @@ pub(crate) fn enrich_project(root: &Path, project: &mut Project) {
                     .iter()
                     .find(|pull_request| pull_request.state == "OPEN")
                 {
-                    item.pull_request = Some(hydrate_pull_request(pull_request));
+                    let (local_commits, remote_commits) =
+                        synchronization(root, &item.head_sha, &pull_request.head_ref_oid);
+                    item.pull_request = Some(hydrate_pull_request(
+                        pull_request,
+                        local_commits,
+                        remote_commits,
+                    ));
                     continue;
                 }
                 item.completed = matching.iter().any(|pull_request| {
@@ -134,7 +140,18 @@ pub(crate) fn repository_name(root: &Path) -> Option<String> {
     parse_repository(remote.trim())
 }
 
-fn hydrate_pull_request(value: &GhPullRequest) -> PullRequest {
+fn synchronization(root: &Path, local_sha: &str, remote_sha: &str) -> (u32, u32) {
+    if local_sha == remote_sha {
+        return (0, 0);
+    }
+    git::ahead_behind(root, remote_sha, local_sha).unwrap_or((0, 1))
+}
+
+fn hydrate_pull_request(
+    value: &GhPullRequest,
+    local_commits: u32,
+    remote_commits: u32,
+) -> PullRequest {
     let checks_pending = value.status_check_rollup.iter().any(|check| {
         check.status == "IN_PROGRESS"
             || check.status == "QUEUED"
@@ -175,6 +192,9 @@ fn hydrate_pull_request(value: &GhPullRequest) -> PullRequest {
         },
         merge_state: merge_state.to_owned(),
         head_branch: value.head_ref_name.clone(),
+        head_sha: value.head_ref_oid.clone(),
+        local_commits,
+        remote_commits,
     }
 }
 

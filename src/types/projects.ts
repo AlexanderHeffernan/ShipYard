@@ -8,6 +8,9 @@ export type PullRequest = {
   mergeable: boolean | null;
   mergeState: 'ready' | 'checksPending' | 'checksFailed' | 'reviewRequired' | 'conflicting' | 'draft';
   headBranch: string;
+  headSha: string;
+  localCommits: number;
+  remoteCommits: number;
 };
 
 export type WorkItem = {

@@ -1,5 +1,7 @@
 import type { Project, WorkItem } from '../types/projects';
 
+export type PullRequestSyncState = 'synced' | 'localChanges' | 'localAhead' | 'remoteAhead' | 'diverged';
+
 export function workItemTitle(item: WorkItem) {
   if (item.branch) return item.branch;
   if (item.worktreePath) return fileName(item.worktreePath) || 'Detached worktree';
@@ -13,6 +15,11 @@ export function workItemKind(project: Project, item: WorkItem) {
 }
 
 export function workItemMeta(item: WorkItem) {
+  const syncState = pullRequestSyncState(item);
+  if (syncState === 'localChanges') return 'Local changes';
+  if (syncState === 'localAhead') return localCommitLabel(item.pullRequest!.localCommits);
+  if (syncState === 'remoteAhead') return 'Checkout behind';
+  if (syncState === 'diverged') return 'Diverged';
   if (item.pullRequest) return `#${item.pullRequest.number}`;
   if (item.status === 'working') {
     if (item.additions > 0 || item.deletions > 0) {
@@ -22,6 +29,29 @@ export function workItemMeta(item: WorkItem) {
   }
 
   return relativeTime(item.updatedAt);
+}
+
+export function pullRequestSyncState(item: WorkItem): PullRequestSyncState | null {
+  const pullRequest = item.pullRequest;
+  if (!pullRequest) return null;
+  if (item.changedFiles > 0) return 'localChanges';
+  if (pullRequest.localCommits > 0 && pullRequest.remoteCommits > 0) return 'diverged';
+  if (pullRequest.localCommits > 0) return 'localAhead';
+  if (pullRequest.remoteCommits > 0 || item.headSha !== pullRequest.headSha) return 'remoteAhead';
+  return 'synced';
+}
+
+export function pullRequestSyncLabel(item: WorkItem) {
+  const state = pullRequestSyncState(item);
+  if (state === 'localChanges') return 'Local changes not in PR';
+  if (state === 'localAhead') return `${localCommitLabel(item.pullRequest!.localCommits)} not in PR`;
+  if (state === 'remoteAhead') return 'Checkout behind PR';
+  if (state === 'diverged') return 'Local and PR diverged';
+  return null;
+}
+
+function localCommitLabel(count: number) {
+  return `${count} local commit${count === 1 ? '' : 's'}`;
 }
 
 export function relativeTime(timestamp: number) {

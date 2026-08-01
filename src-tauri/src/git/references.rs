@@ -82,7 +82,7 @@ pub(super) fn classify(
     }
 }
 
-pub(super) fn ahead_behind(root: &Path, base: &str, item: &str) -> Result<(u32, u32), String> {
+pub(crate) fn ahead_behind(root: &Path, base: &str, item: &str) -> Result<(u32, u32), String> {
     let range = format!("{base}...{item}");
     let counts = command::text(root, &["rev-list", "--left-right", "--count", &range])?;
     let mut counts = counts.split_whitespace();
