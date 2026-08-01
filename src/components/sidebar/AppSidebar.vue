@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import { Settings } from '@lucide/vue';
 import { computed, onBeforeUnmount, ref } from 'vue';
-import type { Project, WorkItem, WorkStatus } from '../../types/projects';
-import { workItemMeta, workItemTitle } from '../../utils/workItems';
+import AppButton from '../ui/AppButton.vue';
+import type { Project, WorkItem } from '../../types/projects';
+import { pullRequestSyncState, workItemMeta, workItemTitle, type PullRequestSyncState } from '../../utils/workItems';
 
 const MIN_WIDTH = 224;
 const MAX_WIDTH = 420;
@@ -11,21 +13,14 @@ type SidebarWorkItem = WorkItem & {
   meta: string;
   color: string;
   projectName: string;
+  syncState: PullRequestSyncState | null;
 };
 
 type WorkSection = {
-  id: WorkStatus;
+  id: 'local' | 'pullRequests';
   label: string;
   items: SidebarWorkItem[];
 };
-
-const SECTION_LABELS: Record<WorkStatus, string> = {
-  working: 'Working',
-  ready: 'Ready',
-  shipped: 'Shipped',
-  mergeConflict: 'Merge Conflict',
-};
-const SECTION_ORDER: WorkStatus[] = ['working', 'ready', 'mergeConflict', 'shipped'];
 
 const collapsedSections = ref(new Set<WorkSection['id']>());
 
@@ -39,6 +34,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   'update:width': [value: number];
   select: [id: string];
+  settings: [];
 }>();
 
 const isResizing = ref(false);
@@ -51,14 +47,22 @@ const sections = computed<WorkSection[]>(() => {
       meta: workItemMeta(item),
       color: project.color,
       projectName: project.name,
+      syncState: pullRequestSyncState(item),
     })),
   );
 
-  return SECTION_ORDER.map((status) => ({
-    id: status,
-    label: SECTION_LABELS[status],
-    items: items.filter((item) => item.status === status),
-  }));
+  return [
+    {
+      id: 'local',
+      label: 'Local Work',
+      items: items.filter((item) => !item.completed && item.status !== 'shipped' && !item.pullRequest),
+    },
+    {
+      id: 'pullRequests',
+      label: 'Pull Requests',
+      items: items.filter((item) => !item.completed && !!item.pullRequest),
+    },
+  ];
 });
 
 function clampWidth(width: number) {
@@ -120,6 +124,10 @@ onBeforeUnmount(stopResize);
   >
     <div class="sidebar__body" :style="{ width: `${width}px` }">
       <nav class="sidebar__content" aria-label="Work">
+        <div v-if="sections.every((section) => section.items.length === 0)" class="sidebar__empty">
+          <strong>Everything is shipped</strong>
+          <span>Local work and open pull requests will appear here.</span>
+        </div>
         <section v-for="section in sections" :key="section.id" class="work-section">
           <button
             class="work-section__header"
@@ -148,11 +156,23 @@ onBeforeUnmount(stopResize);
             >
               <span class="work-item__dot" :style="{ background: item.color }"></span>
               <span class="work-item__title">{{ item.title }}</span>
-              <span class="work-item__meta">{{ item.meta }}</span>
+              <span class="work-item__meta" :class="{ 'work-item__meta--attention': item.syncState && item.syncState !== 'synced', 'work-item__meta--danger': item.syncState === 'diverged' }">{{ item.meta }}</span>
             </button>
           </div>
         </section>
       </nav>
+      <footer class="sidebar__footer">
+        <AppButton
+          variant="ghost"
+          block
+          type="button"
+          title="Settings for ShipYard across all projects"
+          @click="emit('settings')"
+        >
+          <Settings aria-hidden="true" />
+          ShipYard Settings
+        </AppButton>
+      </footer>
     </div>
 
     <div
@@ -197,23 +217,61 @@ onBeforeUnmount(stopResize);
 }
 
 .sidebar__body {
+  display: flex;
   height: 100%;
   padding-top: var(--titlebar-height);
+  flex-direction: column;
   overflow: hidden;
 }
 
 .sidebar__content {
-  height: 100%;
-  padding: 0 12px 24px;
+  min-height: 0;
+  flex: 1;
+  padding: 0 12px 12px;
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+
+.sidebar__footer {
+  flex: 0 0 auto;
+  padding: 9px 12px 12px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.sidebar__footer :deep(.app-button) {
+  justify-content: flex-start;
+  height: 30px;
+  padding: 0 8px;
 }
 
 .work-section + .work-section {
   margin-top: 8px;
   padding-top: 8px;
   border-top: 1px solid var(--border-subtle);
+}
+
+.sidebar__empty {
+  display: flex;
+  min-height: 180px;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 6px;
+  padding: 24px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.sidebar__empty strong {
+  font-size: 12px;
+  font-weight: 550;
+  color: var(--text-primary);
+}
+
+.sidebar__empty span {
+  font-size: 10px;
+  line-height: 1.45;
 }
 
 .work-section__header {
@@ -325,6 +383,14 @@ onBeforeUnmount(stopResize);
 .work-item__meta {
   color: var(--text-secondary);
   white-space: nowrap;
+}
+
+.work-item__meta--attention {
+  color: #e7b950;
+}
+
+.work-item__meta--danger {
+  color: #ff8f8f;
 }
 
 .sidebar__resize-handle {

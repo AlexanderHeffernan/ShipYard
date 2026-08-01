@@ -8,7 +8,7 @@ import {
 } from '../services/run';
 import type { RunScript, RunState } from '../types/run';
 import type { Project, WorkItem } from '../types/projects';
-import { startShip } from '../services/ship';
+import { shipWork as startShipping, type ShippingAction } from '../services/ship';
 
 type OutputEvent = { runId: string; data: number[] };
 type FinishedEvent = { runId: string; exitCode: number | null; success: boolean };
@@ -76,6 +76,37 @@ function finishRun(event: FinishedEvent) {
 }
 
 export function useRunner() {
+  async function shipWork(project: Project, item: WorkItem, action: ShippingAction) {
+    if (currentRun.value && ['running', 'stopping'].includes(currentRun.value.status)) return;
+    error.value = null;
+    await ensureListeners();
+    try {
+      const { runId } = await startShipping(project, item, action);
+      const labels: Record<ShippingAction, string> = {
+        createPullRequest: 'Creating pull request',
+        updatePullRequest: 'Updating pull request',
+        mergePullRequest: 'Merging pull request',
+        directToMain: 'Shipping directly to main',
+      };
+      currentRun.value = {
+        runId,
+        projectId: project.id,
+        workItemId: item.id,
+        kind: 'ship',
+        scriptLabel: labels[action],
+        output: pendingOutput.get(runId) ?? '',
+        status: 'running',
+        exitCode: null,
+      };
+      pendingOutput.delete(runId);
+      const finished = pendingFinished.get(runId);
+      if (finished) finishRun(finished);
+      pendingFinished.delete(runId);
+    } catch (shipError) {
+      error.value = String(shipError);
+    }
+  }
+
   async function run(projectId: string, script: RunScript, workingDirectory: string) {
     if (currentRun.value && ['running', 'stopping'].includes(currentRun.value.status)) return;
     error.value = null;
@@ -98,31 +129,6 @@ export function useRunner() {
       pendingFinished.delete(runId);
     } catch (runError) {
       error.value = String(runError);
-    }
-  }
-
-  async function ship(project: Project, item: WorkItem, script: RunScript) {
-    if (currentRun.value && ['running', 'stopping'].includes(currentRun.value.status)) return;
-    error.value = null;
-    await ensureListeners();
-    try {
-      const { runId } = await startShip(project, item, script.id);
-      currentRun.value = {
-        runId,
-        projectId: project.id,
-        workItemId: item.id,
-        kind: 'ship',
-        scriptLabel: script.label,
-        output: pendingOutput.get(runId) ?? '',
-        status: 'running',
-        exitCode: null,
-      };
-      pendingOutput.delete(runId);
-      const finished = pendingFinished.get(runId);
-      if (finished) finishRun(finished);
-      pendingFinished.delete(runId);
-    } catch (shipError) {
-      error.value = String(shipError);
     }
   }
 
@@ -159,7 +165,7 @@ export function useRunner() {
     }
   }
 
-  return { currentRun, error, run, ship, cancel, sendInput, resize, clear };
+  return { currentRun, error, run, shipWork, cancel, sendInput, resize, clear };
 }
 
 function activeRunId() {

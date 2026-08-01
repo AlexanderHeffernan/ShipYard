@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import AppSettingsModal from './components/settings/AppSettingsModal.vue';
 import WorkItemPanel from './components/review/WorkItemPanel.vue';
 import ProjectSettingsModal from './components/settings/ProjectSettingsModal.vue';
 import AppSidebar from './components/sidebar/AppSidebar.vue';
@@ -11,7 +12,8 @@ const sidebarOpen = ref(true);
 const sidebarWidth = ref(288);
 const selectedWorkItemId = ref<string | null>(null);
 const settingsProject = ref<Project | null>(null);
-const settingsSection = ref<'open' | 'run' | 'ship'>('run');
+const settingsSection = ref<'open' | 'run'>('run');
+const appSettingsOpen = ref(false);
 const {
   projects,
   loading,
@@ -25,7 +27,7 @@ const {
 const selection = computed(() => {
   for (const project of projects.value) {
     const workItem = project.workItems.find((item) => item.id === selectedWorkItemId.value);
-    if (workItem) return { project, workItem };
+    if (workItem && !workItem.completed && workItem.status !== 'shipped') return { project, workItem };
   }
   return null;
 });
@@ -36,7 +38,7 @@ watch(selection, (current) => {
   if (selectedWorkItemId.value && !current) selectedWorkItemId.value = null;
 });
 
-function openSettings(project: Project, section: 'open' | 'run' | 'ship' = 'run') {
+function openSettings(project: Project, section: 'open' | 'run' = 'run') {
   settingsProject.value = project;
   settingsSection.value = section;
 }
@@ -82,6 +84,7 @@ function openProjectSettings(projectId: string) {
       :projects="projects"
       :selected-work-item-id="selectedWorkItemId"
       @select="selectedWorkItemId = $event"
+      @settings="appSettingsOpen = true"
     />
 
     <main class="app-content">
@@ -100,6 +103,7 @@ function openProjectSettings(projectId: string) {
       :initial-section="settingsSection"
       @close="settingsProject = null"
     />
+    <AppSettingsModal v-if="appSettingsOpen" @close="appSettingsOpen = false" />
   </div>
 </template>
 

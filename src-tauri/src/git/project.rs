@@ -8,5 +8,7 @@ pub struct Project {
     pub(super) name: String,
     pub(super) path: String,
     pub(super) default_branch: Option<String>,
-    pub(super) work_items: Vec<WorkItem>,
+    pub(crate) work_items: Vec<WorkItem>,
+    pub(crate) github_repository: Option<String>,
+    pub(crate) github_error: Option<String>,
 }

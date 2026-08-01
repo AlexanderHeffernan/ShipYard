@@ -3,9 +3,10 @@ import { Settings } from '@lucide/vue';
 import { computed } from 'vue';
 import AppButton from '../ui/AppButton.vue';
 import type { Project, WorkItem } from '../../types/projects';
-import { workItemKind, workItemMeta, workItemTitle } from '../../utils/workItems';
+import { pullRequestSyncLabel, pullRequestSyncState, workItemKind, workItemMeta, workItemTitle } from '../../utils/workItems';
 import OpenAction from './OpenAction.vue';
 import RunAction from './RunAction.vue';
+import ShipAction from './ShipAction.vue';
 
 const props = defineProps<{
   project: Project;
@@ -13,14 +14,23 @@ const props = defineProps<{
   sidebarOpen: boolean;
 }>();
 
-const emit = defineEmits<{ settings: [section: 'open' | 'run' | 'ship']; refresh: [] }>();
+const emit = defineEmits<{ settings: [section: 'open' | 'run']; refresh: [] }>();
 
 const title = computed(() => workItemTitle(props.workItem));
 const kind = computed(() => workItemKind(props.project, props.workItem));
 const meta = computed(() => workItemMeta(props.workItem));
-const statusLabel = computed(() =>
-  props.workItem.status === 'mergeConflict' ? 'Merge Conflict' : props.workItem.status,
-);
+const syncState = computed(() => pullRequestSyncState(props.workItem));
+const syncLabel = computed(() => pullRequestSyncLabel(props.workItem));
+const statusLabel = computed(() => {
+  if (syncLabel.value) return syncLabel.value;
+  const state = props.workItem.pullRequest?.mergeState;
+  if (!state) return 'Local Work';
+  return ({ ready: 'Ready to merge', checksPending: 'Checks running', checksFailed: 'Checks failed', reviewRequired: 'Review required', conflicting: 'Resolving needed', draft: 'Draft PR' } as const)[state];
+});
+const statusClass = computed(() => {
+  if (syncState.value && syncState.value !== 'synced') return `status-pill--${syncState.value}`;
+  return props.workItem.pullRequest ? `status-pill--${props.workItem.pullRequest.mergeState}` : 'status-pill--local';
+});
 </script>
 
 <template>
@@ -29,7 +39,7 @@ const statusLabel = computed(() =>
       <div class="work-header__identity">
         <span class="work-header__dot" :style="{ background: project.color }"></span>
         <h1>{{ title }}</h1>
-        <span class="status-pill" :class="`status-pill--${workItem.status}`">
+        <span class="status-pill" :class="statusClass">
           {{ statusLabel }}
         </span>
       </div>
@@ -37,23 +47,18 @@ const statusLabel = computed(() =>
       <div class="work-header__actions">
         <OpenAction :project="project" :work-item="workItem" @settings="emit('settings', 'open')" />
         <RunAction :project="project" :work-item="workItem" @settings="emit('settings', $event)" />
-        <RunAction
-          mode="ship"
-          :project="project"
-          :work-item="workItem"
-          @settings="emit('settings', $event)"
-          @refresh="emit('refresh')"
-        />
+        <ShipAction :project="project" :work-item="workItem" @refresh="emit('refresh')" />
         <AppButton
           class="work-header__settings"
           variant="ghost"
-          size="icon"
+          size="small"
           type="button"
           :aria-label="`Project settings for ${project.name}`"
           :title="`Project settings — ${project.name}`"
           @click="emit('settings', 'run')"
         >
           <Settings aria-hidden="true" />
+          <span>Project Settings</span>
         </AppButton>
       </div>
     </div>
@@ -63,7 +68,12 @@ const statusLabel = computed(() =>
       <span class="work-header__separator"></span>
       <span>{{ kind }}</span>
       <span class="work-header__separator"></span>
-      <span :class="{ 'work-header__changes': workItem.status === 'working' }">{{ meta }}</span>
+      <span v-if="workItem.pullRequest">#{{ workItem.pullRequest.number }}</span>
+      <span v-else :class="{ 'work-header__changes': workItem.status === 'working' }">{{ meta }}</span>
+      <template v-if="syncLabel">
+        <span class="work-header__separator"></span>
+        <span class="work-header__sync" :class="{ 'work-header__sync--danger': syncState === 'diverged' }">{{ syncLabel }}</span>
+      </template>
     </div>
   </header>
 </template>
@@ -131,13 +141,24 @@ const statusLabel = computed(() =>
   border-radius: 9px;
 }
 
-.status-pill--working {
+.status-pill--local {
   color: #e7b950;
   background: rgba(231, 185, 80, 0.1);
   border-color: rgba(231, 185, 80, 0.18);
 }
 
-.status-pill--ready {
+.status-pill--localChanges,
+.status-pill--localAhead,
+.status-pill--remoteAhead {
+  color: #e7b950;
+  background: rgba(231, 185, 80, 0.1);
+  border-color: rgba(231, 185, 80, 0.18);
+}
+
+.status-pill--ready,
+.status-pill--checksPending,
+.status-pill--reviewRequired,
+.status-pill--draft {
   color: #79aeff;
   background: rgba(80, 145, 255, 0.11);
   border-color: rgba(80, 145, 255, 0.2);
@@ -149,7 +170,9 @@ const statusLabel = computed(() =>
   border-color: rgba(62, 190, 111, 0.19);
 }
 
-.status-pill--mergeConflict {
+.status-pill--conflicting,
+.status-pill--checksFailed,
+.status-pill--diverged {
   color: #ff8f8f;
   background: rgba(255, 85, 85, 0.1);
   border-color: rgba(255, 85, 85, 0.22);
@@ -166,7 +189,6 @@ const statusLabel = computed(() =>
 }
 
 .work-header__settings {
-  width: 24px;
   height: 24px;
 }
 
@@ -192,6 +214,14 @@ const statusLabel = computed(() =>
 
 .work-header__changes {
   font-variant-numeric: tabular-nums;
+}
+
+.work-header__sync {
+  color: #e7b950;
+}
+
+.work-header__sync--danger {
+  color: #ff8f8f;
 }
 
 @media (max-width: 680px) {

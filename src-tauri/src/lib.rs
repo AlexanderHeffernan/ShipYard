@@ -1,67 +1,57 @@
+mod agents;
 mod git;
+mod github;
 mod open;
 mod run;
-mod ship;
+mod shipping;
 mod watch;
 
 use tauri::Manager;
 
 #[tauri::command]
-async fn scan_project(app: tauri::AppHandle, path: String) -> Result<git::Project, String> {
-    let data_dir = app
+async fn get_agent_configuration(
+    app: tauri::AppHandle,
+) -> Result<agents::AgentConfiguration, String> {
+    let base = app
         .path()
         .app_data_dir()
         .map_err(|error| error.to_string())?;
+    tauri::async_runtime::spawn_blocking(move || agents::configuration(&base))
+        .await
+        .map_err(|error| format!("agent detection failed: {error}"))?
+}
+
+#[tauri::command]
+async fn save_agent_settings(
+    app: tauri::AppHandle,
+    settings: agents::AgentSettings,
+) -> Result<agents::AgentConfiguration, String> {
+    let base = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| error.to_string())?;
+    tauri::async_runtime::spawn_blocking(move || agents::save(&base, settings))
+        .await
+        .map_err(|error| format!("agent settings save failed: {error}"))?
+}
+
+#[tauri::command]
+async fn scan_project(path: String) -> Result<git::Project, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let project_id = git::project_id(&path)?;
-        let states = ship::active_states(&data_dir, &project_id)?;
-        git::scan_project_with_conflicts(&path, &states.conflicts, &states.shipped)
+        let (root, _) = git::resolve(&path)?;
+        let mut project = git::scan_project(&path)?;
+        github::enrich_project(&root, &mut project);
+        Ok(project)
     })
     .await
     .map_err(|error| format!("project scan failed: {error}"))?
 }
 
 #[tauri::command]
-fn get_ship_settings(
-    app: tauri::AppHandle,
-    project_id: String,
-) -> Result<run::RunSettings, String> {
-    ship::load_settings(
-        &app.path()
-            .app_data_dir()
-            .map_err(|error| error.to_string())?,
-        &project_id,
-    )
-}
-
-#[tauri::command]
-fn save_ship_script(
-    app: tauri::AppHandle,
-    project_id: String,
-    script: run::ScriptInput,
-) -> Result<run::RunSettings, String> {
-    ship::save_script(
-        &app.path()
-            .app_data_dir()
-            .map_err(|error| error.to_string())?,
-        &project_id,
-        script,
-    )
-}
-
-#[tauri::command]
-fn delete_ship_script(
-    app: tauri::AppHandle,
-    project_id: String,
-    script_id: String,
-) -> Result<run::RunSettings, String> {
-    ship::delete_script(
-        &app.path()
-            .app_data_dir()
-            .map_err(|error| error.to_string())?,
-        &project_id,
-        &script_id,
-    )
+async fn get_github_status() -> Result<github::GitHubStatus, String> {
+    tauri::async_runtime::spawn_blocking(github::status)
+        .await
+        .map_err(|error| format!("GitHub status check failed: {error}"))
 }
 
 #[tauri::command]
@@ -176,12 +166,12 @@ fn run_script(
 }
 
 #[tauri::command]
-fn ship_script(
+fn ship_work(
     app: tauri::AppHandle,
     state: tauri::State<'_, run::RunManager>,
-    request: ship::ShipRequest,
+    request: shipping::ShippingRequest,
 ) -> Result<run::RunStarted, String> {
-    state.start_ship(app, request)
+    state.start_shipping(app, request)
 }
 
 #[tauri::command]
@@ -215,10 +205,10 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
+            get_agent_configuration,
+            save_agent_settings,
             scan_project,
-            get_ship_settings,
-            save_ship_script,
-            delete_ship_script,
+            get_github_status,
             get_open_settings,
             save_open_application,
             delete_open_application,
@@ -229,7 +219,7 @@ pub fn run() {
             save_run_script,
             delete_run_script,
             run_script,
-            ship_script,
+            ship_work,
             cancel_run,
             write_run_input,
             resize_run_terminal

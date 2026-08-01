@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { AppWindow, Plus, Trash2 } from '@lucide/vue';
-import { computed, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { useOpenApplications } from '../../composables/useOpenApplications';
 import { chooseApplication } from '../../services/open';
 import type { OpenApplication, OpenApplicationInput } from '../../types/open';
@@ -10,7 +10,10 @@ const { settings, load, save, remove } = useOpenApplications();
 const selectedId = ref<string | null>(null);
 const draft = ref<OpenApplicationInput>(newDraft());
 const saving = ref(false);
+const deleting = ref(false);
+const saved = ref(false);
 const error = ref<string | null>(null);
+let savedFeedbackTimer: number | undefined;
 const applications = computed(() => settings.value?.applications ?? []);
 
 watch(
@@ -36,6 +39,7 @@ function selectApplication(application: OpenApplication) {
     appPath: application.appPath,
     makeDefault: settings.value?.defaultApplicationId === application.id,
   };
+  saved.value = false;
   error.value = null;
 }
 
@@ -56,11 +60,15 @@ async function browse() {
 
 async function saveDraft() {
   saving.value = true;
+  saved.value = false;
   error.value = null;
   try {
     const updated = await save(draft.value);
     const selected = updated.applications.find((app) => app.id === draft.value.id);
     selectApplication(selected ?? updated.applications[updated.applications.length - 1]!);
+    saved.value = true;
+    window.clearTimeout(savedFeedbackTimer);
+    savedFeedbackTimer = window.setTimeout(() => (saved.value = false), 1600);
   } catch (saveError) {
     error.value = String(saveError);
   } finally {
@@ -70,6 +78,7 @@ async function saveDraft() {
 
 async function deleteSelected() {
   if (!selectedId.value || !window.confirm(`Remove “${draft.value.label}”?`)) return;
+  deleting.value = true;
   try {
     const updated = await remove(selectedId.value);
     selectedId.value = null;
@@ -78,10 +87,13 @@ async function deleteSelected() {
     if (next) selectApplication(next);
   } catch (deleteError) {
     error.value = String(deleteError);
+  } finally {
+    deleting.value = false;
   }
 }
 
 void load().catch((loadError) => (error.value = String(loadError)));
+onBeforeUnmount(() => window.clearTimeout(savedFeedbackTimer));
 </script>
 
 <template>
@@ -135,12 +147,12 @@ void load().catch((loadError) => (error.value = String(loadError)));
         </label>
         <p v-if="error" class="application-editor__error">{{ error }}</p>
         <div class="application-editor__actions">
-          <AppButton v-if="selectedId" variant="danger" type="button" @click="deleteSelected">
+          <AppButton v-if="selectedId" variant="danger" type="button" :loading="deleting" loading-label="Removing" @click="deleteSelected">
             <Trash2 aria-hidden="true" /> Remove
           </AppButton>
           <span></span>
-          <AppButton variant="primary" type="submit" :disabled="saving">
-            {{ saving ? 'Saving…' : 'Save application' }}
+          <AppButton variant="primary" type="submit" :loading="saving" loading-label="Saving" :success="saved" success-label="Saved">
+            Save application
           </AppButton>
         </div>
       </form>

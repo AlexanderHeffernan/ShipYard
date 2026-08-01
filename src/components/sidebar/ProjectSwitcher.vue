@@ -107,11 +107,12 @@ onBeforeUnmount(() => {
           variant="ghost"
           block
           type="button"
-          :disabled="loading"
+          :loading="loading"
+          loading-label="Scanning"
           @click="emit('add')"
         >
           <Plus aria-hidden="true" />
-          <span>{{ loading ? 'Scanning…' : 'Add project' }}</span>
+          <span>Add project</span>
         </AppButton>
       </div>
     </Transition>

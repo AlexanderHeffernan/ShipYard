@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { openUrl } from '@tauri-apps/plugin-opener';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useOpenApplications } from '../../composables/useOpenApplications';
 import type { Project, WorkItem } from '../../types/projects';
@@ -15,7 +16,7 @@ const defaultApplication = computed(() =>
     (application) => application.id === settings.value?.defaultApplicationId,
   ),
 );
-const checkoutPath = computed(() => props.workItem.resolutionPath ?? props.workItem.worktreePath);
+const checkoutPath = computed(() => props.workItem.worktreePath);
 const label = computed(() =>
   defaultApplication.value ? `Open: ${defaultApplication.value.label}` : 'Set up Open',
 );
@@ -41,6 +42,18 @@ async function openWith(application: OpenApplication) {
   } catch (launchError) {
     error.value = String(launchError);
     menuOpen.value = true;
+  }
+}
+
+async function openPullRequest() {
+  const url = props.workItem.pullRequest?.url;
+  if (!url) return;
+  error.value = null;
+  try {
+    await openUrl(url);
+    menuOpen.value = false;
+  } catch (openError) {
+    error.value = String(openError);
   }
 }
 
@@ -78,6 +91,10 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeMenu));
     </button>
 
     <div v-if="menuOpen" class="open-menu">
+      <button v-if="workItem.pullRequest" type="button" @click="openPullRequest">
+        <span>Open PR on GitHub</span>
+        <small>#{{ workItem.pullRequest.number }}</small>
+      </button>
       <p v-if="!checkoutPath" class="open-menu__notice">
         This branch needs to be checked out before it can be opened.
       </p>
