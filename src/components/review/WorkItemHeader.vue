@@ -6,6 +6,7 @@ import type { Project, WorkItem } from '../../types/projects';
 import { workItemKind, workItemMeta, workItemTitle } from '../../utils/workItems';
 import OpenAction from './OpenAction.vue';
 import RunAction from './RunAction.vue';
+import ShipAction from './ShipAction.vue';
 
 const props = defineProps<{
   project: Project;
@@ -13,14 +14,17 @@ const props = defineProps<{
   sidebarOpen: boolean;
 }>();
 
-const emit = defineEmits<{ settings: [section: 'open' | 'run' | 'ship']; refresh: [] }>();
+const emit = defineEmits<{ settings: [section: 'open' | 'run']; refresh: [] }>();
 
 const title = computed(() => workItemTitle(props.workItem));
 const kind = computed(() => workItemKind(props.project, props.workItem));
 const meta = computed(() => workItemMeta(props.workItem));
-const statusLabel = computed(() =>
-  props.workItem.status === 'mergeConflict' ? 'Merge Conflict' : props.workItem.status,
-);
+const statusLabel = computed(() => {
+  const state = props.workItem.pullRequest?.mergeState;
+  if (!state) return 'Local Work';
+  return ({ ready: 'Ready to merge', checksPending: 'Checks running', checksFailed: 'Checks failed', reviewRequired: 'Review required', conflicting: 'Resolving needed', draft: 'Draft PR' } as const)[state];
+});
+const statusClass = computed(() => props.workItem.pullRequest ? `status-pill--${props.workItem.pullRequest.mergeState}` : 'status-pill--local');
 </script>
 
 <template>
@@ -29,7 +33,7 @@ const statusLabel = computed(() =>
       <div class="work-header__identity">
         <span class="work-header__dot" :style="{ background: project.color }"></span>
         <h1>{{ title }}</h1>
-        <span class="status-pill" :class="`status-pill--${workItem.status}`">
+        <span class="status-pill" :class="statusClass">
           {{ statusLabel }}
         </span>
       </div>
@@ -37,13 +41,7 @@ const statusLabel = computed(() =>
       <div class="work-header__actions">
         <OpenAction :project="project" :work-item="workItem" @settings="emit('settings', 'open')" />
         <RunAction :project="project" :work-item="workItem" @settings="emit('settings', $event)" />
-        <RunAction
-          mode="ship"
-          :project="project"
-          :work-item="workItem"
-          @settings="emit('settings', $event)"
-          @refresh="emit('refresh')"
-        />
+        <ShipAction :project="project" :work-item="workItem" @refresh="emit('refresh')" />
         <AppButton
           class="work-header__settings"
           variant="ghost"
@@ -131,13 +129,16 @@ const statusLabel = computed(() =>
   border-radius: 9px;
 }
 
-.status-pill--working {
+.status-pill--local {
   color: #e7b950;
   background: rgba(231, 185, 80, 0.1);
   border-color: rgba(231, 185, 80, 0.18);
 }
 
-.status-pill--ready {
+.status-pill--ready,
+.status-pill--checksPending,
+.status-pill--reviewRequired,
+.status-pill--draft {
   color: #79aeff;
   background: rgba(80, 145, 255, 0.11);
   border-color: rgba(80, 145, 255, 0.2);
@@ -149,7 +150,8 @@ const statusLabel = computed(() =>
   border-color: rgba(62, 190, 111, 0.19);
 }
 
-.status-pill--mergeConflict {
+.status-pill--conflicting,
+.status-pill--checksFailed {
   color: #ff8f8f;
   background: rgba(255, 85, 85, 0.1);
   border-color: rgba(255, 85, 85, 0.22);

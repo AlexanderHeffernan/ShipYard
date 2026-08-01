@@ -26,11 +26,6 @@ pub(crate) fn belongs_to_project(project_id: &str, worktree_path: &str) -> Resul
     Ok(path_string(&common_dir) == project_id)
 }
 
-pub(crate) fn project_id(selected_path: &str) -> Result<String, String> {
-    let (_, common_dir) = resolve(selected_path)?;
-    Ok(path_string(&common_dir))
-}
-
 pub(crate) fn validate_worktree(project_id: &str, path: &str) -> Result<PathBuf, String> {
     let requested = canonical_path(Path::new(path))?;
     let (root, common_dir) = resolve(path)

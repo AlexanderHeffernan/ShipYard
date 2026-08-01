@@ -1,28 +1,26 @@
 <script setup lang="ts">
-import { ExternalLink, Play, Plus, Ship, TerminalSquare, Trash2, X } from '@lucide/vue';
+import { ExternalLink, Play, Plus, TerminalSquare, Trash2, X } from '@lucide/vue';
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue';
 import AppButton from '../ui/AppButton.vue';
 import OpenSettingsSection from './OpenSettingsSection.vue';
 import type { Project } from '../../types/projects';
 import type { RunScript, ScriptInput } from '../../types/run';
 import { useRunScripts } from '../../composables/useRunScripts';
-import { useShipScripts } from '../../composables/useShipScripts';
 
-const props = withDefaults(defineProps<{ project: Project; initialSection?: 'open' | 'run' | 'ship' }>(), {
+const props = withDefaults(defineProps<{ project: Project; initialSection?: 'open' | 'run' }>(), {
   initialSection: 'run',
 });
 const emit = defineEmits<{ close: [] }>();
 const runScripts = useRunScripts();
-const shipScripts = useShipScripts();
-const activeSection = ref<'open' | 'run' | 'ship'>(props.initialSection);
+const activeSection = ref<'open' | 'run'>(props.initialSection);
 const selectedId = ref<string | null>(null);
 const draft = ref<ScriptInput>(newDraft());
 const saving = ref(false);
 const error = ref<string | null>(null);
-const scriptStore = computed(() => (activeSection.value === 'ship' ? shipScripts : runScripts));
+const scriptStore = computed(() => runScripts);
 const settings = computed(() => scriptStore.value.settingsByProject.value[props.project.id]);
 const scripts = computed(() => settings.value?.scripts ?? []);
-const actionName = computed(() => (activeSection.value === 'ship' ? 'Ship' : 'Run'));
+const actionName = computed(() => 'Run');
 
 watch(
   () => settings.value,
@@ -46,10 +44,9 @@ watch(
 );
 
 function newDraft(): ScriptInput {
-  const ship = activeSection.value === 'ship';
   return {
     id: null,
-    label: ship ? 'Ship work' : 'Run project',
+    label: 'Run project',
     content: '#!/bin/zsh\nset -euo pipefail\n\n# Add your commands here\n',
     makeDefault: false,
   };
@@ -143,10 +140,6 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown));
           <button :class="{ 'settings-nav__active': activeSection === 'run' }" type="button" @click="activeSection = 'run'">
             <Play aria-hidden="true" />
             Run
-          </button>
-          <button :class="{ 'settings-nav__active': activeSection === 'ship' }" type="button" @click="activeSection = 'ship'">
-            <Ship aria-hidden="true" />
-            Ship
           </button>
         </nav>
 

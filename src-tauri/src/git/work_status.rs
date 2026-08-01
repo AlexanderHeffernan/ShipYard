@@ -6,6 +6,4 @@ pub(super) enum WorkStatus {
     Working,
     Ready,
     Shipped,
-    #[serde(rename = "mergeConflict")]
-    MergeConflict,
 }

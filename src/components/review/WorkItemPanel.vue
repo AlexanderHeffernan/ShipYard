@@ -11,7 +11,7 @@ defineProps<{
 }>();
 
 const emit = defineEmits<{
-  settings: [project: Project, section: 'open' | 'run' | 'ship'];
+  settings: [project: Project, section: 'open' | 'run'];
   refresh: [projectId: string];
 }>();
 

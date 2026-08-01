@@ -15,7 +15,7 @@ const defaultApplication = computed(() =>
     (application) => application.id === settings.value?.defaultApplicationId,
   ),
 );
-const checkoutPath = computed(() => props.workItem.resolutionPath ?? props.workItem.worktreePath);
+const checkoutPath = computed(() => props.workItem.worktreePath);
 const label = computed(() =>
   defaultApplication.value ? `Open: ${defaultApplication.value.label}` : 'Set up Open',
 );

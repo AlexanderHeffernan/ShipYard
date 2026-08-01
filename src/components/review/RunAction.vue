@@ -2,22 +2,17 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRunner } from '../../composables/useRunner';
 import { useRunScripts } from '../../composables/useRunScripts';
-import { useShipScripts } from '../../composables/useShipScripts';
 import type { Project, WorkItem } from '../../types/projects';
 import type { RunScript } from '../../types/run';
 
-const props = withDefaults(defineProps<{ project: Project; workItem: WorkItem; mode?: 'run' | 'ship' }>(), {
-  mode: 'run',
-});
-const emit = defineEmits<{ settings: [section: 'run' | 'ship']; refresh: [] }>();
+const props = defineProps<{ project: Project; workItem: WorkItem }>();
+const emit = defineEmits<{ settings: [section: 'run'] }>();
 const runScripts = useRunScripts();
-const shipScripts = useShipScripts();
-const { currentRun, error, run, ship, cancel } = useRunner();
+const { currentRun, error, run, cancel } = useRunner();
 const root = ref<HTMLElement>();
 const menuOpen = ref(false);
-const refreshedRunId = ref<string | null>(null);
 
-const scriptStore = computed(() => (props.mode === 'ship' ? shipScripts : runScripts));
+const scriptStore = computed(() => runScripts);
 const settings = computed(() => scriptStore.value.settingsByProject.value[props.project.id]);
 const defaultScript = computed(() =>
   settings.value?.scripts.find((script) => script.id === settings.value?.defaultScriptId),
@@ -25,8 +20,7 @@ const defaultScript = computed(() =>
 const isActive = computed(
   () =>
     currentRun.value?.projectId === props.project.id &&
-    currentRun.value?.kind === props.mode &&
-    (props.mode === 'run' || currentRun.value?.workItemId === props.workItem.id) &&
+    currentRun.value?.kind === 'run' &&
     ['running', 'stopping'].includes(currentRun.value.status),
 );
 const anotherRunActive = computed(
@@ -38,21 +32,20 @@ const anotherRunActive = computed(
 const label = computed(() => {
   if (isActive.value && currentRun.value?.status === 'stopping') return 'Stopping…';
   if (isActive.value) return 'Stop';
-  if (!defaultScript.value) return `Set up ${actionName.value}`;
-  return `${actionName.value}: ${defaultScript.value.label}`;
+  if (!defaultScript.value) return 'Set up Run';
+  return `Run: ${defaultScript.value.label}`;
 });
-const actionName = computed(() => (props.mode === 'ship' ? 'Ship' : 'Run'));
+const actionName = computed(() => 'Run');
 const mainDisabled = computed(
   () =>
     anotherRunActive.value ||
     currentRun.value?.status === 'stopping' ||
-    (props.mode === 'ship' && !props.project.defaultBranch) ||
     (!!defaultScript.value && !props.workItem.worktreePath),
 );
 
 async function runDefault() {
   if (isActive.value) return cancel();
-  if (!defaultScript.value) return emit('settings', props.mode);
+  if (!defaultScript.value) return emit('settings', 'run');
   return runSelected(defaultScript.value);
 }
 
@@ -60,11 +53,9 @@ async function runSelected(script: RunScript) {
   menuOpen.value = false;
   if (
     !props.workItem.worktreePath ||
-    anotherRunActive.value ||
-    (props.mode === 'ship' && !props.project.defaultBranch)
+    anotherRunActive.value
   ) return;
-  if (props.mode === 'ship') await ship(props.project, props.workItem, script);
-  else await run(props.project.id, script, props.workItem.worktreePath);
+  await run(props.project.id, script, props.workItem.worktreePath);
 }
 
 function closeMenu(event: PointerEvent) {
@@ -75,21 +66,6 @@ watch(
   () => props.project.id,
   (projectId) => void scriptStore.value.load(projectId),
   { immediate: true },
-);
-watch(
-  () => currentRun.value,
-  (state) => {
-    if (
-      props.mode === 'ship' &&
-      state?.kind === 'ship' &&
-      state.workItemId === props.workItem.id &&
-      !['running', 'stopping'].includes(state.status) &&
-      refreshedRunId.value !== state.runId
-    ) {
-      refreshedRunId.value = state.runId;
-      emit('refresh');
-    }
-  },
 );
 onMounted(() => document.addEventListener('pointerdown', closeMenu));
 onBeforeUnmount(() => document.removeEventListener('pointerdown', closeMenu));
@@ -102,9 +78,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeMenu));
       type="button"
       :disabled="mainDisabled"
       :title="
-        mode === 'ship' && !project.defaultBranch
-          ? 'Ship requires a local default branch'
-          : !workItem.worktreePath
+        !workItem.worktreePath
           ? `This branch must be checked out before it can ${actionName.toLowerCase()}`
           : defaultScript
             ? `${isActive ? 'Stop' : actionName} “${defaultScript.label}”`
@@ -114,7 +88,6 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeMenu));
     >
       <svg viewBox="0 0 16 16" aria-hidden="true">
         <path v-if="isActive" d="M4.5 4.5h7v7h-7z" />
-        <path v-else-if="mode === 'ship'" d="M2.5 9.5h11l-2 3h-7l-2-3Zm3-1V3.5l5 2.5-5 2.5Z" />
         <path v-else d="m5.25 3.25 7 4.75-7 4.75v-9.5Z" />
       </svg>
       <span>{{ label }}</span>
@@ -135,7 +108,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeMenu));
         v-for="script in settings?.scripts ?? []"
         :key="script.id"
         type="button"
-        :disabled="!workItem.worktreePath || (mode === 'ship' && !project.defaultBranch)"
+        :disabled="!workItem.worktreePath"
         @click="runSelected(script)"
       >
         <svg viewBox="0 0 16 16" aria-hidden="true">
@@ -144,7 +117,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeMenu));
         <span>{{ script.label }}</span>
       </button>
       <p v-if="settings?.scripts.length === 0">No scripts configured</p>
-      <button class="run-menu__settings" type="button" @click="emit('settings', mode)">
+      <button class="run-menu__settings" type="button" @click="emit('settings', 'run')">
         Configure scripts…
       </button>
       <p v-if="error" class="run-menu__error">{{ error }}</p>

@@ -8,11 +8,7 @@ use std::{
     path::Path,
 };
 
-pub fn scan_project_with_conflicts(
-    selected_path: &str,
-    conflicts: &[(String, String)],
-    shipped: &[(String, String)],
-) -> Result<Project, String> {
+pub fn scan_project(selected_path: &str) -> Result<Project, String> {
     let (root, common_dir) = repository::resolve(selected_path)?;
     let project_id = repository::path_string(&common_dir);
     let worktrees = worktree_reader::read(&root)?;
@@ -37,7 +33,6 @@ pub fn scan_project_with_conflicts(
         &worktrees,
         base.as_ref(),
     )?);
-    apply_lifecycle(&mut items, conflicts, shipped);
     items.sort_by_key(|item| std::cmp::Reverse(item.updated_at));
 
     let project_root = project_root(&root, &worktrees);
@@ -47,25 +42,9 @@ pub fn scan_project_with_conflicts(
         path: repository::path_string(project_root),
         default_branch: base.map(|base| base.name),
         work_items: items,
+        github_repository: None,
+        github_error: None,
     })
-}
-
-fn apply_lifecycle(
-    items: &mut [WorkItem],
-    conflicts: &[(String, String)],
-    shipped: &[(String, String)],
-) {
-    for item in items {
-        if shipped
-            .iter()
-            .any(|(id, sha)| id == &item.id && sha == &item.head_sha)
-        {
-            item.status = WorkStatus::Shipped;
-        } else if let Some((_, path)) = conflicts.iter().find(|(id, _)| id == &item.id) {
-            item.status = WorkStatus::MergeConflict;
-            item.resolution_path = Some(path.clone());
-        }
-    }
 }
 
 fn index_worktrees(worktrees: &[Worktree]) -> HashMap<String, &Worktree> {
@@ -164,10 +143,11 @@ fn branch_work_item(
         project_id: project_id.to_owned(),
         branch: Some(branch.name),
         worktree_path: worktree.map(|item| repository::path_string(&item.path)),
-        resolution_path: None,
         head_sha: branch.sha,
         last_commit_subject: branch.subject,
         status,
+        pull_request: None,
+        completed: false,
         additions: stats.additions,
         deletions: stats.deletions,
         changed_files: stats.changed_files,
@@ -214,10 +194,11 @@ fn unborn_item(project_id: &str, worktree: &Worktree) -> Result<Option<WorkItem>
         project_id: project_id.to_owned(),
         branch: Some(short_branch_name(branch_ref)),
         worktree_path: Some(repository::path_string(&worktree.path)),
-        resolution_path: None,
         head_sha: worktree.sha.clone(),
         last_commit_subject: String::new(),
         status: WorkStatus::Working,
+        pull_request: None,
+        completed: false,
         additions: stats.additions,
         deletions: stats.deletions,
         changed_files: stats.changed_files,
@@ -269,10 +250,11 @@ fn detached_item(
         project_id: project_id.to_owned(),
         branch: None,
         worktree_path: Some(repository::path_string(&worktree.path)),
-        resolution_path: None,
         head_sha: worktree.sha.clone(),
         last_commit_subject: subject,
         status,
+        pull_request: None,
+        completed: false,
         additions: stats.additions,
         deletions: stats.deletions,
         changed_files: stats.changed_files,

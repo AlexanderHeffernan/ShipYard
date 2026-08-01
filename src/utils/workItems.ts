@@ -13,6 +13,7 @@ export function workItemKind(project: Project, item: WorkItem) {
 }
 
 export function workItemMeta(item: WorkItem) {
+  if (item.pullRequest) return `#${item.pullRequest.number}`;
   if (item.status === 'working') {
     if (item.additions > 0 || item.deletions > 0) {
       return `+${item.additions} −${item.deletions}`;

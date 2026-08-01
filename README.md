@@ -1,7 +1,35 @@
-# Tauri + Vue + TypeScript
+# ShipYard
 
-This template should help get you started developing with Vue 3 and TypeScript in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
+ShipYard is an opinionated desktop shipping queue for local Git work and GitHub pull requests.
 
-## Recommended IDE Setup
+- **Local Work** contains checked-out work that has not become a pull request.
+- **Pull Requests** contains open GitHub pull requests and their merge state.
+- Merged and closed work leaves the queue.
 
-- [VS Code](https://code.visualstudio.com/) + [Vue - Official](https://marketplace.visualstudio.com/items?itemName=Vue.volar) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+Creating a pull request asks the configured coding agent to write the commit and pull-request metadata, commits local changes, checks compatibility with the latest default branch, pushes the branch, and opens the pull request. If Git finds a semantic merge conflict, ShipYard creates an isolated resolution worktree and asks the agent to resolve it before continuing.
+
+## Integrations
+
+ShipYard currently detects and supports:
+
+- [Amp](https://ampcode.com/)
+- [Codex](https://github.com/openai/codex)
+- A custom executable that accepts instructions on standard input
+- GitHub through an authenticated [GitHub CLI](https://cli.github.com/) installation
+
+Choose one preferred coding agent in the global ShipYard Settings modal. Agent use is automatic after selection.
+
+## Development
+
+```sh
+npm install
+npm run tauri dev
+```
+
+Validation:
+
+```sh
+npm run build
+cargo test --manifest-path src-tauri/Cargo.toml
+cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+```

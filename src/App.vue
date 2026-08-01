@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { Settings } from '@lucide/vue';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import AppSettingsModal from './components/settings/AppSettingsModal.vue';
 import WorkItemPanel from './components/review/WorkItemPanel.vue';
 import ProjectSettingsModal from './components/settings/ProjectSettingsModal.vue';
 import AppSidebar from './components/sidebar/AppSidebar.vue';
@@ -11,7 +13,8 @@ const sidebarOpen = ref(true);
 const sidebarWidth = ref(288);
 const selectedWorkItemId = ref<string | null>(null);
 const settingsProject = ref<Project | null>(null);
-const settingsSection = ref<'open' | 'run' | 'ship'>('run');
+const settingsSection = ref<'open' | 'run'>('run');
+const appSettingsOpen = ref(false);
 const {
   projects,
   loading,
@@ -25,7 +28,7 @@ const {
 const selection = computed(() => {
   for (const project of projects.value) {
     const workItem = project.workItems.find((item) => item.id === selectedWorkItemId.value);
-    if (workItem) return { project, workItem };
+    if (workItem && !workItem.completed && workItem.status !== 'shipped') return { project, workItem };
   }
   return null;
 });
@@ -36,7 +39,7 @@ watch(selection, (current) => {
   if (selectedWorkItemId.value && !current) selectedWorkItemId.value = null;
 });
 
-function openSettings(project: Project, section: 'open' | 'run' | 'ship' = 'run') {
+function openSettings(project: Project, section: 'open' | 'run' = 'run') {
   settingsProject.value = project;
   settingsSection.value = section;
 }
@@ -74,6 +77,15 @@ function openProjectSettings(projectId: string) {
         @remove="removeProject"
         @settings="openProjectSettings"
       />
+      <button
+        class="app-settings-button"
+        type="button"
+        aria-label="ShipYard settings"
+        title="ShipYard settings"
+        @click="appSettingsOpen = true"
+      >
+        <Settings aria-hidden="true" />
+      </button>
     </div>
 
     <AppSidebar
@@ -100,6 +112,7 @@ function openProjectSettings(projectId: string) {
       :initial-section="settingsSection"
       @close="settingsProject = null"
     />
+    <AppSettingsModal v-if="appSettingsOpen" @close="appSettingsOpen = false" />
   </div>
 </template>
 
@@ -147,6 +160,28 @@ function openProjectSettings(projectId: string) {
   background: transparent;
   border: 0;
   border-radius: 7px;
+}
+
+.app-settings-button {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  place-items: center;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+}
+
+.app-settings-button:hover {
+  color: var(--text-primary);
+  background: var(--surface-hover);
+}
+
+.app-settings-button svg {
+  width: 14px;
+  height: 14px;
 }
 
 .sidebar-toggle:hover {

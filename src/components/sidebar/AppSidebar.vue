@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from 'vue';
-import type { Project, WorkItem, WorkStatus } from '../../types/projects';
+import type { Project, WorkItem } from '../../types/projects';
 import { workItemMeta, workItemTitle } from '../../utils/workItems';
 
 const MIN_WIDTH = 224;
@@ -14,18 +14,10 @@ type SidebarWorkItem = WorkItem & {
 };
 
 type WorkSection = {
-  id: WorkStatus;
+  id: 'local' | 'pullRequests';
   label: string;
   items: SidebarWorkItem[];
 };
-
-const SECTION_LABELS: Record<WorkStatus, string> = {
-  working: 'Working',
-  ready: 'Ready',
-  shipped: 'Shipped',
-  mergeConflict: 'Merge Conflict',
-};
-const SECTION_ORDER: WorkStatus[] = ['working', 'ready', 'mergeConflict', 'shipped'];
 
 const collapsedSections = ref(new Set<WorkSection['id']>());
 
@@ -54,11 +46,18 @@ const sections = computed<WorkSection[]>(() => {
     })),
   );
 
-  return SECTION_ORDER.map((status) => ({
-    id: status,
-    label: SECTION_LABELS[status],
-    items: items.filter((item) => item.status === status),
-  }));
+  return [
+    {
+      id: 'local',
+      label: 'Local Work',
+      items: items.filter((item) => !item.completed && item.status !== 'shipped' && !item.pullRequest),
+    },
+    {
+      id: 'pullRequests',
+      label: 'Pull Requests',
+      items: items.filter((item) => !item.completed && !!item.pullRequest),
+    },
+  ];
 });
 
 function clampWidth(width: number) {
@@ -120,6 +119,10 @@ onBeforeUnmount(stopResize);
   >
     <div class="sidebar__body" :style="{ width: `${width}px` }">
       <nav class="sidebar__content" aria-label="Work">
+        <div v-if="sections.every((section) => section.items.length === 0)" class="sidebar__empty">
+          <strong>Everything is shipped</strong>
+          <span>Local work and open pull requests will appear here.</span>
+        </div>
         <section v-for="section in sections" :key="section.id" class="work-section">
           <button
             class="work-section__header"
@@ -214,6 +217,29 @@ onBeforeUnmount(stopResize);
   margin-top: 8px;
   padding-top: 8px;
   border-top: 1px solid var(--border-subtle);
+}
+
+.sidebar__empty {
+  display: flex;
+  min-height: 180px;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 6px;
+  padding: 24px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.sidebar__empty strong {
+  font-size: 12px;
+  font-weight: 550;
+  color: var(--text-primary);
+}
+
+.sidebar__empty span {
+  font-size: 10px;
+  line-height: 1.45;
 }
 
 .work-section__header {
