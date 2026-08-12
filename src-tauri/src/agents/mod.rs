@@ -162,14 +162,38 @@ fn detected(kind: AgentKind, label: &str, name: &str) -> AgentInfo {
 }
 
 fn executable(name: &str) -> Option<PathBuf> {
-    let output = Command::new("/bin/zsh")
-        .args(["-lc", &format!("command -v {name}")])
-        .output()
-        .ok()?;
-    output
-        .status
-        .success()
-        .then(|| PathBuf::from(String::from_utf8_lossy(&output.stdout).trim()))
+    let home = std::env::var_os("HOME").map(PathBuf::from);
+    executable_with_home(name, home.as_deref())
+}
+
+fn executable_with_home(name: &str, home: Option<&Path>) -> Option<PathBuf> {
+    let startup_script = r#"
+if [[ -r "$HOME/.zshrc" ]]; then
+  source "$HOME/.zshrc" >/dev/null 2>&1
+fi
+resolved="$(command -v "$1" 2>/dev/null)"
+if [[ -n "$resolved" ]]; then
+  printf '__SHIPYARD_EXECUTABLE__%s\n' "$resolved"
+  exit 0
+fi
+exit 1
+"#;
+    let mut command = Command::new("/bin/zsh");
+    command.args(["-lc", startup_script, "shipyard", name]);
+    if let Some(home) = home {
+        command.env("HOME", home);
+    }
+    let output = command.output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let prefix = "__SHIPYARD_EXECUTABLE__";
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .rev()
+        .find_map(|line| line.strip_prefix(prefix))
+        .filter(|path| !path.is_empty())
+        .map(PathBuf::from)
         .filter(|path| path.is_file())
 }
 
@@ -200,7 +224,12 @@ fn settings_path(base: &Path) -> PathBuf {
 
 #[cfg(test)]
 mod tests {
-    use super::AgentSettings;
+    use super::{executable_with_home, AgentSettings};
+    use std::{
+        fs,
+        path::PathBuf,
+        time::{SystemTime, UNIX_EPOCH},
+    };
 
     #[test]
     fn ignores_previously_configured_custom_agent() {
@@ -209,5 +238,38 @@ mod tests {
         )
         .unwrap();
         assert!(settings.preferred_agent.is_none());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn detects_an_agent_from_zshrc_without_inherited_path() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let root = temporary_directory();
+        let home = root.join("home");
+        let bin = home.join("bin");
+        let executable = bin.join("amp");
+        fs::create_dir_all(&bin).unwrap();
+        fs::write(
+            &home.join(".zshrc"),
+            "export PATH=\"$HOME/bin:/usr/bin:/bin\"\n",
+        )
+        .unwrap();
+        fs::write(&executable, "#!/bin/sh\n").unwrap();
+        fs::set_permissions(&executable, fs::Permissions::from_mode(0o755)).unwrap();
+
+        assert_eq!(executable_with_home("amp", Some(&home)), Some(executable));
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    fn temporary_directory() -> PathBuf {
+        let suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!("shipyard-agent-test-{suffix}"));
+        fs::create_dir_all(&path).unwrap();
+        path
     }
 }
