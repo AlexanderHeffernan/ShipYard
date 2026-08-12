@@ -22,6 +22,7 @@ pub use deletion::{DeleteWorkItemRequest, DeletionPlan, DeletionResult};
 pub use checkout::{pull_request as checkout_pull_request, CheckoutPullRequestRequest, CheckoutPullRequestResult};
 pub use diff_view::{read as read_work_item_diff, WorkItemDiff, WorkItemDiffRequest};
 pub use project::Project;
+pub(crate) use references::agent_thread_url;
 pub(crate) use references::ahead_behind;
 pub(crate) use repository::validate_worktree;
 pub(crate) use repository::{belongs_to_project, resolve};

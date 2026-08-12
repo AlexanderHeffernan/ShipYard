@@ -127,6 +127,9 @@ pub(crate) fn enrich_project(root: &Path, project: &mut Project) {
                 });
                 if let Some(item) = local_item {
                     item.id = pull_request_id(&project.id, pull_request.number);
+                    if item.agent_thread_url.is_none() {
+                        item.agent_thread_url = git::agent_thread_url(root, &pull_request.head_ref_oid);
+                    }
                     let (local_commits, remote_commits) =
                         synchronization(root, &item.head_sha, &pull_request.head_ref_oid);
                     item.pull_request = Some(hydrate_pull_request(
@@ -136,6 +139,7 @@ pub(crate) fn enrich_project(root: &Path, project: &mut Project) {
                     ));
                 } else if relevant(pull_request, &user.login) {
                     project.work_items.push(remote_pull_request_item(
+                        root,
                         &project.id,
                         pull_request,
                     ));
@@ -156,13 +160,18 @@ fn relevant(pull_request: &GhPullRequest, login: &str) -> bool {
             .any(|reviewer| reviewer.login == login)
 }
 
-fn remote_pull_request_item(project_id: &str, pull_request: &GhPullRequest) -> git::WorkItem {
+fn remote_pull_request_item(
+    root: &Path,
+    project_id: &str,
+    pull_request: &GhPullRequest,
+) -> git::WorkItem {
     git::WorkItem {
         id: pull_request_id(project_id, pull_request.number),
         project_id: project_id.to_owned(),
         branch: None,
         worktree_path: None,
         head_sha: pull_request.head_ref_oid.clone(),
+        agent_thread_url: git::agent_thread_url(root, &pull_request.head_ref_oid),
         last_commit_subject: pull_request.title.clone(),
         status: WorkStatus::Ready,
         pull_request: Some(hydrate_pull_request(pull_request, 0, 0)),
