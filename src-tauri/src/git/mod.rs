@@ -5,6 +5,7 @@ pub(crate) mod command;
 mod deletion;
 mod diff;
 mod diff_stats;
+mod diff_view;
 mod project;
 mod references;
 mod repository;
@@ -16,6 +17,7 @@ mod worktree_reader;
 
 pub use deletion::{delete as delete_work_item, inspect as inspect_work_item_deletion};
 pub use deletion::{DeleteWorkItemRequest, DeletionPlan, DeletionResult};
+pub use diff_view::{read as read_work_item_diff, WorkItemDiff, WorkItemDiffRequest};
 pub use project::Project;
 pub(crate) use references::ahead_behind;
 pub(crate) use repository::validate_worktree;
