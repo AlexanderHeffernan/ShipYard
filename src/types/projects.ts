@@ -7,6 +7,7 @@ export type PullRequest = {
   draft: boolean;
   mergeable: boolean | null;
   mergeState: 'ready' | 'checksPending' | 'checksFailed' | 'reviewRequired' | 'conflicting' | 'draft';
+  checksReported: boolean;
   headBranch: string;
   baseBranch: string;
   headSha: string;

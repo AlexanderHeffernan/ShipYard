@@ -38,6 +38,7 @@ const workItem = {
     draft: false,
     mergeable: true,
     mergeState: 'ready',
+    checksReported: true,
     headBranch: 'feature/review',
     baseBranch: 'main',
     headSha: 'abc1234',

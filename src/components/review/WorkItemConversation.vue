@@ -266,7 +266,7 @@ onBeforeUnmount(() => {
         ></textarea>
         <div class="conversation__composer-footer">
           <span id="comment-help">Markdown is supported. This posts a top-level GitHub comment; review actions stay on GitHub.</span>
-          <button type="submit" :disabled="posting || !draft.trim()">
+          <button type="submit" :disabled="posting">
             <LoaderCircle v-if="posting" class="is-spinning" aria-hidden="true" />
             <CheckCircle2 v-else-if="posted" aria-hidden="true" />
             <Send v-else aria-hidden="true" />

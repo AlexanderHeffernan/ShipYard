@@ -24,10 +24,12 @@ const statusLabel = computed(() => {
   if (syncLabel.value) return syncLabel.value;
   const state = props.workItem.pullRequest?.mergeState;
   if (!state) return 'Local Work';
+  if (state === 'ready' && props.workItem.pullRequest?.checksReported === false) return 'Checks not visible';
   return ({ ready: 'Ready to merge', checksPending: 'Checks running', checksFailed: 'Checks failed', reviewRequired: 'Review required', conflicting: 'Resolving needed', draft: 'Draft PR' } as const)[state];
 });
 const statusClass = computed(() => {
   if (syncState.value && syncState.value !== 'synced') return `status-pill--${syncState.value}`;
+  if (props.workItem.pullRequest?.mergeState === 'ready' && props.workItem.pullRequest.checksReported === false) return 'status-pill--checksUnavailable';
   return props.workItem.pullRequest ? `status-pill--${props.workItem.pullRequest.mergeState}` : 'status-pill--local';
 });
 </script>
@@ -141,12 +143,19 @@ const statusClass = computed(() => {
 }
 
 .status-pill--ready,
+.status-pill--checksUnavailable,
 .status-pill--checksPending,
 .status-pill--reviewRequired,
 .status-pill--draft {
   color: var(--primary-hover);
   background: var(--primary-subtle);
   border-color: var(--primary-border);
+}
+
+.status-pill--checksUnavailable {
+  color: var(--warning);
+  background: var(--warning-subtle);
+  border-color: var(--warning-border);
 }
 
 .status-pill--shipped {

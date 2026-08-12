@@ -794,6 +794,7 @@ fn hydrate_pull_request(
     remote_commits: u32,
 ) -> PullRequest {
     let check_rollup = value.status_check_rollup.as_deref().unwrap_or_default();
+    let checks_reported = !check_rollup.is_empty();
     let checks_pending = check_rollup.iter().any(|check| {
         matches!(check.status.as_deref(), Some("IN_PROGRESS" | "QUEUED"))
             || matches!(check.state.as_deref(), Some("PENDING"))
@@ -832,6 +833,7 @@ fn hydrate_pull_request(
             _ => None,
         },
         merge_state: merge_state.to_owned(),
+        checks_reported,
         head_branch: value.head_ref_name.clone(),
         base_branch: value.base_ref_name.clone(),
         head_sha: value.head_ref_oid.clone(),
