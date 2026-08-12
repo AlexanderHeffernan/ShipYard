@@ -141,8 +141,11 @@ onBeforeUnmount(() => {
         <span class="github-status__icon"><GitPullRequest aria-hidden="true" /></span>
         <div>
           <strong>{{ github.authenticated ? `Connected as ${github.account}` : 'GitHub is not connected' }}</strong>
-          <p>{{ github.authenticated ? 'Shipyard can discover, create, and merge pull requests.' : github.error }}</p>
+          <p>{{ github.authenticated ? 'Shipyard can discover pull requests, read checks and discussion, and use the permissions below for shipping.' : github.error }}</p>
           <small v-if="github.version">{{ github.version }}</small>
+          <small v-if="github.authenticated && github.scopes.length" class="github-status__scopes">
+            Token scopes: {{ github.scopes.join(', ') }}
+          </small>
         </div>
         <Check v-if="github.authenticated" class="github-status__check" aria-hidden="true" />
       </div>
@@ -165,6 +168,7 @@ main { min-width: 0; flex: 1; padding: 24px; overflow-y: auto; }
 .agent-card__identity { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 4px; }
 .agent-card strong, .github-status strong { font-size: 12px; font-weight: 550; }
 .agent-card small, .github-status small { overflow: hidden; font: 9px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text-secondary); text-overflow: ellipsis; white-space: nowrap; }
+.github-status__scopes { display: block; margin-top: 4px; }
 .agent-card > svg, .github-status__check { width: 15px; color: var(--success); }
 .notice, .error { margin: 4px 0 0; font-size: 10px; color: var(--text-secondary); }
 .error { color: var(--danger); }

@@ -3,6 +3,7 @@ export type GitHubStatus = {
   authenticated: boolean;
   account: string | null;
   version: string | null;
+  scopes: string[];
   error: string | null;
 };
 

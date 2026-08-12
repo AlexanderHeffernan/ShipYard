@@ -1,11 +1,14 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { GitCompare, GitCommitHorizontal, MessageSquare, ShieldCheck } from '@lucide/vue';
+import { ref, watch } from 'vue';
 import type { Project, WorkItem } from '../../types/projects';
 import RunConsole from './RunConsole.vue';
 import WorkItemChanges from './WorkItemChanges.vue';
+import WorkItemChecks from './WorkItemChecks.vue';
+import WorkItemConversation from './WorkItemConversation.vue';
 import WorkItemHeader from './WorkItemHeader.vue';
 
-defineProps<{
+const props = defineProps<{
   project: Project | null;
   workItem: WorkItem | null;
   sidebarOpen: boolean;
@@ -16,9 +19,16 @@ const emit = defineEmits<{
   refresh: [projectId: string];
 }>();
 
-type ReviewTab = 'changes' | 'commits';
+type ReviewTab = 'changes' | 'commits' | 'checks' | 'conversation';
 
 const activeTab = ref<ReviewTab>('changes');
+
+watch(
+  () => `${props.project?.id ?? 'none'}:${props.workItem?.id ?? 'none'}`,
+  () => {
+    activeTab.value = 'changes';
+  },
+);
 </script>
 
 <template>
@@ -38,8 +48,9 @@ const activeTab = ref<ReviewTab>('changes');
         :aria-current="activeTab === 'changes' ? 'page' : undefined"
         @click="activeTab = 'changes'"
       >
-        Changes
-        <span>{{ workItem.changedFiles }}</span>
+        <GitCompare aria-hidden="true" />
+        <span class="review-tabs__label">Changes</span>
+        <span class="review-tabs__count">{{ workItem.changedFiles }}</span>
       </button>
       <button
         type="button"
@@ -47,7 +58,28 @@ const activeTab = ref<ReviewTab>('changes');
         :aria-current="activeTab === 'commits' ? 'page' : undefined"
         @click="activeTab = 'commits'"
       >
-        Commits
+        <GitCommitHorizontal aria-hidden="true" />
+        <span class="review-tabs__label">Commits</span>
+      </button>
+      <button
+        v-if="workItem.pullRequest"
+        type="button"
+        :class="{ 'review-tabs__tab--active': activeTab === 'checks' }"
+        :aria-current="activeTab === 'checks' ? 'page' : undefined"
+        @click="activeTab = 'checks'"
+      >
+        <ShieldCheck aria-hidden="true" />
+        <span class="review-tabs__label">Checks</span>
+      </button>
+      <button
+        v-if="workItem.pullRequest"
+        type="button"
+        :class="{ 'review-tabs__tab--active': activeTab === 'conversation' }"
+        :aria-current="activeTab === 'conversation' ? 'page' : undefined"
+        @click="activeTab = 'conversation'"
+      >
+        <MessageSquare aria-hidden="true" />
+        <span class="review-tabs__label">Conversation</span>
       </button>
     </nav>
 
@@ -57,13 +89,23 @@ const activeTab = ref<ReviewTab>('changes');
         :project="project"
         :work-item="workItem"
       />
-      <div v-else class="work-panel__placeholder">
+      <div v-else-if="activeTab === 'commits'" class="work-panel__placeholder">
         <svg viewBox="0 0 20 20" aria-hidden="true">
           <path d="M10 5.25v4.75l3 1.75M3.75 5.5v-2.25M3.75 3.25H6m-2.1 2.4A7 7 0 1 1 3 8.75" />
         </svg>
         <strong>Commits</strong>
         <span>The commit history will appear here.</span>
       </div>
+      <WorkItemChecks
+        v-else-if="activeTab === 'checks'"
+        :project="project"
+        :work-item="workItem"
+      />
+      <WorkItemConversation
+        v-else
+        :project="project"
+        :work-item="workItem"
+      />
     </div>
     <RunConsole :project-id="project.id" />
   </section>
@@ -113,6 +155,12 @@ const activeTab = ref<ReviewTab>('changes');
   border: 0;
 }
 
+.review-tabs button svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 1.65;
+}
+
 .review-tabs button:hover,
 .review-tabs__tab--active {
   color: var(--text-primary) !important;
@@ -134,7 +182,7 @@ const activeTab = ref<ReviewTab>('changes');
   outline-offset: -2px;
 }
 
-.review-tabs button span {
+.review-tabs__count {
   display: grid;
   min-width: 16px;
   height: 16px;
