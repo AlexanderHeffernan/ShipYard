@@ -2,6 +2,7 @@
 import { ref } from 'vue';
 import type { Project, WorkItem } from '../../types/projects';
 import RunConsole from './RunConsole.vue';
+import WorkItemChanges from './WorkItemChanges.vue';
 import WorkItemHeader from './WorkItemHeader.vue';
 
 defineProps<{
@@ -51,21 +52,17 @@ const activeTab = ref<ReviewTab>('changes');
     </nav>
 
     <div class="work-panel__body">
-      <div class="work-panel__placeholder">
-        <svg v-if="activeTab === 'changes'" viewBox="0 0 20 20" aria-hidden="true">
-          <path d="M5.25 3.25h6l3.5 3.5v10H5.25v-13Zm6 0v3.5h3.5M7.75 10h4.5m-4.5 3h4.5" />
-        </svg>
-        <svg v-else viewBox="0 0 20 20" aria-hidden="true">
+      <WorkItemChanges
+        v-if="activeTab === 'changes'"
+        :project="project"
+        :work-item="workItem"
+      />
+      <div v-else class="work-panel__placeholder">
+        <svg viewBox="0 0 20 20" aria-hidden="true">
           <path d="M10 5.25v4.75l3 1.75M3.75 5.5v-2.25M3.75 3.25H6m-2.1 2.4A7 7 0 1 1 3 8.75" />
         </svg>
-        <strong>{{ activeTab === 'changes' ? 'Changes' : 'Commits' }}</strong>
-        <span>
-          {{
-            activeTab === 'changes'
-              ? 'The file list and diff viewer will appear here.'
-              : 'The commit history will appear here.'
-          }}
-        </span>
+        <strong>Commits</strong>
+        <span>The commit history will appear here.</span>
       </div>
     </div>
     <RunConsole :project-id="project.id" />
@@ -150,8 +147,10 @@ const activeTab = ref<ReviewTab>('changes');
 }
 
 .work-panel__body {
+  display: flex;
   min-height: 0;
   flex: 1;
+  overflow: hidden;
 }
 
 .work-panel__placeholder {

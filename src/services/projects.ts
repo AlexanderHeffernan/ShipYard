@@ -7,6 +7,8 @@ import type {
   DeletionPlan,
   DeletionResult,
   ScannedProject,
+  WorkItemDiff,
+  WorkItemDiffRequest,
 } from '../types/projects';
 
 export async function chooseProjectDirectory() {
@@ -25,6 +27,10 @@ export function scanProject(path: string) {
 
 export function checkoutPullRequest(request: CheckoutPullRequestRequest) {
   return invoke<{ worktreePath: string }>('checkout_pull_request', { request });
+}
+
+export function getWorkItemDiff(request: WorkItemDiffRequest) {
+  return invoke<WorkItemDiff>('get_work_item_diff', { request });
 }
 
 export function inspectWorkItemDeletion(request: DeleteWorkItemRequest) {

@@ -1,5 +1,5 @@
 use super::{command, diff_stats::DiffStats};
-use std::path::Path;
+use std::{fs, path::Path};
 
 pub(super) fn read_stats(worktree: &Path) -> Result<DiffStats, String> {
     let status = command::output(
@@ -14,6 +14,7 @@ pub(super) fn read_stats(worktree: &Path) -> Result<DiffStats, String> {
     };
     let diff = read_numstat(worktree)?;
     add_numstat(&mut stats, &diff.stdout);
+    add_untracked_stats(worktree, &mut stats)?;
     Ok(stats)
 }
 
@@ -31,6 +32,37 @@ fn add_numstat(stats: &mut DiffStats, output: &[u8]) {
         let mut fields = line.splitn(3, '\t');
         stats.additions += parse_count(fields.next());
         stats.deletions += parse_count(fields.next());
+    }
+}
+
+fn add_untracked_stats(worktree: &Path, stats: &mut DiffStats) -> Result<(), String> {
+    let output = command::output(
+        worktree,
+        &["ls-files", "--others", "--exclude-standard", "-z", "--"],
+    )?;
+    for path in output
+        .stdout
+        .split(|byte| *byte == 0)
+        .filter(|path| !path.is_empty())
+    {
+        let Ok(path) = std::str::from_utf8(path) else {
+            continue;
+        };
+        let contents = fs::read(worktree.join(path))
+            .map_err(|error| format!("Could not read untracked file {path}: {error}"))?;
+        if !contents.contains(&0) {
+            stats.additions += line_count(&contents);
+        }
+    }
+    Ok(())
+}
+
+fn line_count(contents: &[u8]) -> u64 {
+    if contents.is_empty() {
+        0
+    } else {
+        contents.iter().filter(|byte| **byte == b'\n').count() as u64
+            + u64::from(!contents.ends_with(b"\n"))
     }
 }
 
