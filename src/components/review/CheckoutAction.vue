@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { checkoutPullRequest } from '../../services/projects';
 import type { Project, WorkItem } from '../../types/projects';
 
@@ -9,6 +9,13 @@ const checkingOut = ref(false);
 const error = ref<string | null>(null);
 
 const unavailable = computed(() => !props.workItem.pullRequest || !props.project.githubRepository);
+
+watch(
+  () => props.workItem.worktreePath,
+  (worktreePath) => {
+    if (worktreePath) checkingOut.value = false;
+  },
+);
 
 async function checkout() {
   const pullRequest = props.workItem.pullRequest;
@@ -25,7 +32,6 @@ async function checkout() {
     emit('checkedOut');
   } catch (checkoutError) {
     error.value = checkoutError instanceof Error ? checkoutError.message : String(checkoutError);
-  } finally {
     checkingOut.value = false;
   }
 }
