@@ -35,6 +35,7 @@ pub(crate) fn output_allow_failure(root: &Path, args: &[&str]) -> Output {
         .arg(root)
         .args(args)
         .env("GIT_OPTIONAL_LOCKS", "0")
+        .env("GIT_TERMINAL_PROMPT", "0")
         .env("LC_ALL", "C")
         .output()
         .unwrap_or_else(|error| Output {

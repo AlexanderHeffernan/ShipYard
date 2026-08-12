@@ -424,6 +424,8 @@ fn reads_a_remote_pull_request_after_fetching_its_head() {
         head_sha: head.clone(),
         default_branch: Some("main".to_owned()),
         pull_request_number: Some(7),
+        pull_request_base_branch: Some("main".to_owned()),
+        pull_request_head_sha: Some(head.clone()),
     };
 
     let diff = read_work_item_diff(request).unwrap();
@@ -436,9 +438,62 @@ fn reads_a_remote_pull_request_after_fetching_its_head() {
         ),
         head
     );
+    assert_eq!(
+        text(
+            &review,
+            &["rev-parse", "refs/shipyard/pull-requests/7/base"],
+        ),
+        text(&review, &["rev-parse", "refs/remotes/origin/main"])
+    );
     fs::remove_dir_all(root).unwrap();
     fs::remove_dir_all(remote).unwrap();
     fs::remove_dir_all(review).unwrap();
+}
+
+#[test]
+fn reads_a_local_branch_against_the_fetched_remote_base() {
+    let root = committed_repository("diff-local-remote-base");
+    let remote = root.with_extension("remote.git");
+    run(&root, &["init", "--bare", remote.to_str().unwrap()]);
+    run(
+        &root,
+        &["remote", "add", "origin", remote.to_str().unwrap()],
+    );
+    run(&root, &["push", "-u", "origin", "main"]);
+    let local_base = text(&root, &["rev-parse", "refs/heads/main"]);
+
+    run(&root, &["switch", "-c", "feature/local-review"]);
+    fs::write(root.join("feature.txt"), "local feature\n").unwrap();
+    run(&root, &["add", "feature.txt"]);
+    run(&root, &["commit", "-m", "Add local feature"]);
+    run(&root, &["switch", "main"]);
+    fs::write(root.join("remote-base.txt"), "new remote base\n").unwrap();
+    run(&root, &["add", "remote-base.txt"]);
+    run(&root, &["commit", "-m", "Advance remote base"]);
+    run(&root, &["push", "origin", "main"]);
+    run(&root, &["switch", "feature/local-review"]);
+    run(&root, &["branch", "--force", "main", &local_base]);
+
+    let project = scan_project(root.to_str().unwrap()).unwrap();
+    let item = project
+        .work_items
+        .iter()
+        .find(|item| item.branch.as_deref() == Some("feature/local-review"))
+        .unwrap();
+    let diff = read_work_item_diff(diff_request(&project, item)).unwrap();
+
+    assert_eq!(diff.comparison_label, "main");
+    assert!(diff.patch.contains("feature.txt"));
+    assert!(!diff.patch.contains("remote-base.txt"));
+    assert_eq!(
+        text(&root, &["rev-parse", "refs/shipyard/bases/main"]),
+        text(&remote, &["rev-parse", "refs/heads/main"])
+    );
+    assert_eq!(current_branch(&root), "feature/local-review");
+    assert_eq!(text(&root, &["rev-parse", "refs/heads/main"]), local_base);
+
+    fs::remove_dir_all(root).unwrap();
+    fs::remove_dir_all(remote).unwrap();
 }
 
 fn assert_branch_status(root: &Path, branch: &str, expected: WorkStatus) {
@@ -490,6 +545,14 @@ fn diff_request(project: &Project, item: &WorkItem) -> WorkItemDiffRequest {
             .pull_request
             .as_ref()
             .map(|pull_request| pull_request.number),
+        pull_request_base_branch: item
+            .pull_request
+            .as_ref()
+            .map(|pull_request| pull_request.base_branch.clone()),
+        pull_request_head_sha: item
+            .pull_request
+            .as_ref()
+            .map(|pull_request| pull_request.head_sha.clone()),
     }
 }
 

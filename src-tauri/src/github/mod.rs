@@ -22,6 +22,7 @@ struct GhPullRequest {
     merge_state_status: String,
     head_ref_name: String,
     head_ref_oid: String,
+    base_ref_name: String,
     review_decision: String,
     status_check_rollup: Vec<GhCheck>,
     #[serde(default)]
@@ -113,7 +114,7 @@ pub(crate) fn enrich_project(root: &Path, project: &mut Project) {
             "--limit",
             "100",
             "--json",
-            "number,title,url,isDraft,mergeStateStatus,headRefName,headRefOid,reviewDecision,statusCheckRollup,assignees,reviewRequests,author",
+            "number,title,url,isDraft,mergeStateStatus,headRefName,headRefOid,baseRefName,reviewDecision,statusCheckRollup,assignees,reviewRequests,author",
         ],
     )
     .and_then(|value| serde_json::from_str::<Vec<GhPullRequest>>(&value).map_err(|e| e.to_string()));
@@ -236,6 +237,7 @@ fn hydrate_pull_request(
         },
         merge_state: merge_state.to_owned(),
         head_branch: value.head_ref_name.clone(),
+        base_branch: value.base_ref_name.clone(),
         head_sha: value.head_ref_oid.clone(),
         local_commits,
         remote_commits,
