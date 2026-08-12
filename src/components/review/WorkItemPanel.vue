@@ -9,6 +9,7 @@ defineProps<{
   project: Project | null;
   workItem: WorkItem | null;
   sidebarOpen: boolean;
+  fullscreen: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -27,6 +28,7 @@ const activeTab = ref<ReviewTab>('changes');
       :project="project"
       :work-item="workItem"
       :sidebar-open="sidebarOpen"
+      :fullscreen="fullscreen"
       @settings="emit('settings', project, $event)"
       @refresh="emit('refresh', project.id)"
     />
