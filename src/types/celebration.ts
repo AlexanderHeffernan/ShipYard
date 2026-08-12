@@ -82,7 +82,7 @@ export const completionAnimationOptions = [
   {
     id: 'shipyard-sunset',
     label: 'Shipyard sunset',
-    description: 'The front-facing cargo ship leaves the docks and fades into the logo’s sunset.',
+    description: 'The original ShipYard cargo-ship mark gently recedes into its sunset.',
     default: false,
     fullScreen: true,
   },

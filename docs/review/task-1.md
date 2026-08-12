@@ -6,6 +6,8 @@ The review captures below were taken from the running ShipYard Tauri app on the 
 
 ![Completion animation choices](task-1-celebration-variants.jpg)
 
+![Shipyard sunset using the supplied ShipYard mark](task-1-shipyard-sunset.png)
+
 To exercise the feature, open **Shipyard Settings → Experimental**, choose an option from
 **Completion animation**, choose **Fast**, **Normal**, or **Slow** for a full-screen option,
 and select **Preview**. The 12 choices are:
@@ -32,3 +34,8 @@ successfully; failed, cancelled, blocked, and ordinary script runs stay quiet. E
 fades in and out. Quiet handoff first fades the review surface, then reveals a centered cargo-ship
 receipt with the shipped item and destination. ShipYard-managed temporary resolution and pull
 request worktrees stay out of Local Work while shipping is in progress.
+
+Shipyard sunset uses the supplied ShipYard mark directly for the cargo ship, sun, mirrored
+shipyard silhouettes, and water treatment rather than approximating those shapes with generated
+ripples. The mark gently scales toward the sun and fades out, keeping the vessel anchored to the
+waterline and preserving the icon’s exact visual language.

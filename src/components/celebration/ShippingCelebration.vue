@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Check, X } from '@lucide/vue';
 import { computed, onBeforeUnmount, onMounted, ref, useId } from 'vue';
+import shipyardIcon from '../../assets/shipyard-icon.png';
 import {
   completionAnimationSpeedMultiplier,
   isFullScreenCompletionAnimation,
@@ -58,35 +59,6 @@ const fireworkBursts = [
   { id: 'right', className: 'firework-sky__burst--right', color: '#a78bfa', delay: '540ms' },
 ];
 const fireworkAngles = Array.from({ length: 12 }, (_, index) => `${index * 30}deg`);
-const shipyardReflectionBands = Array.from({ length: 10 }, (_, index) => ({
-  id: index,
-  width: `${13 + index * 5.6}%`,
-  top: `${72 + index * 2.05}%`,
-  color: index % 2 === 0 ? '#f56d3d' : '#a93255',
-}));
-const shipyardRipples = Array.from({ length: 17 }, (_, index) => {
-  const y = 560 + index * 14;
-  const spread = 28 + index * 24;
-  const amplitude = index % 3 === 0 ? 5 : 3;
-  const points = (start: number, end: number) => {
-    const result: string[] = [];
-    const steps = Math.max(3, Math.floor((end - start) / 26));
-    for (let point = 0; point <= steps; point += 1) {
-      const x = start + ((end - start) * point) / steps;
-      const offset = point % 2 === 0 ? -amplitude : amplitude;
-      result.push(`${x.toFixed(1)} ${(y + offset).toFixed(1)}`);
-    }
-    return result.join(' L ');
-  };
-
-  return {
-    id: index,
-    d: `M ${points(600 - spread, 590)} M ${points(610, 600 + spread)}`,
-    color: index % 4 === 0 ? '#f47731' : index % 3 === 0 ? '#d74951' : '#8f2b4b',
-    opacity: 0.34 + (index % 4) * 0.1,
-    delay: `${index * 90}ms`,
-  };
-});
 
 const copy = computed(() => {
   if (quietHandoff.value) {
@@ -254,65 +226,10 @@ onBeforeUnmount(() => {
       </template>
 
       <template v-else-if="animation === 'shipyard-sunset'">
-        <svg class="shipyard-sunset__art" viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid slice">
-          <defs>
-            <linearGradient id="shipyard-sunset-sky" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stop-color="#241232" />
-              <stop offset="0.46" stop-color="#8d1e47" />
-              <stop offset="0.76" stop-color="#f4472d" />
-              <stop offset="1" stop-color="#ff8b24" />
-            </linearGradient>
-            <radialGradient id="shipyard-sunset-sun" cx="50%" cy="50%" r="50%">
-              <stop offset="0" stop-color="#ffe66b" />
-              <stop offset="0.7" stop-color="#ffb82e" />
-              <stop offset="1" stop-color="#ff6a24" />
-            </radialGradient>
-            <linearGradient id="shipyard-sunset-water" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stop-color="#9d2748" />
-              <stop offset="0.35" stop-color="#661d3c" />
-              <stop offset="1" stop-color="#23142e" />
-            </linearGradient>
-            <filter id="shipyard-sunset-grain" x="0" y="0" width="100%" height="100%">
-              <feTurbulence type="fractalNoise" baseFrequency="0.78" numOctaves="2" seed="17" />
-              <feColorMatrix type="saturate" values="0" />
-            </filter>
-          </defs>
-          <rect width="1200" height="800" fill="url(#shipyard-sunset-sky)" />
-          <circle class="shipyard-sunset__sun" cx="600" cy="285" r="230" fill="url(#shipyard-sunset-sun)" />
-          <path class="shipyard-sunset__dock" d="M0 535V410h55v58h24v31h24v20h27v18h28v-2h25v35H0Z" />
-          <path class="shipyard-sunset__dock" d="M1200 535V410h-55v58h-24v31h-24v20h-27v18h-28v-2h-25v35h183Z" />
-          <rect y="535" width="1200" height="265" fill="url(#shipyard-sunset-water)" />
-          <path class="shipyard-sunset__dock-pier" d="M0 526h183v25H0Zm1200 0h-183v25h183Z" />
-          <path class="shipyard-sunset__bollard" d="M143 526v-32m-13 0h26m-20 0v-10m14 10v-10M1057 526v-32m-13 0h26m-20 0v-10m14 10v-10" />
-          <ellipse class="shipyard-sunset__reflection" cx="600" cy="566" rx="172" ry="22" />
-          <g class="shipyard-sunset__ripples">
-            <path
-              v-for="ripple in shipyardRipples"
-              :key="ripple.id"
-              :d="ripple.d"
-              :stroke="ripple.color"
-              :opacity="ripple.opacity"
-              :style="{ animationDelay: ripple.delay }"
-            />
-          </g>
-          <rect width="1200" height="800" filter="url(#shipyard-sunset-grain)" opacity="0.045" />
-        </svg>
-        <div class="shipyard-sunset__reflection-overlay">
-          <span
-            v-for="band in shipyardReflectionBands"
-            :key="band.id"
-            class="shipyard-sunset__reflection-strip"
-            :style="{ display: 'block', width: band.width, top: band.top, height: '6px', opacity: '0.7', background: band.color }"
-          ></span>
+        <div class="shipyard-sunset__glow"></div>
+        <div class="shipyard-sunset__stage">
+          <img class="shipyard-sunset__logo" :src="shipyardIcon" alt="" draggable="false" />
         </div>
-        <svg class="shipyard-sunset__vessel" viewBox="0 0 300 300" aria-hidden="true">
-          <path class="shipyard-sunset__vessel-mast" d="M150 20v78m-36-50h72" />
-          <rect class="shipyard-sunset__vessel-bridge" x="90" y="82" width="120" height="57" rx="4" />
-          <path class="shipyard-sunset__vessel-windows" d="M103 96h23v12h-23zm35 0h23v12h-23zm35 0h23v12h-23z" />
-          <path class="shipyard-sunset__vessel-hull" d="m150 136 110 52-17 53-33 39-60 12-60-12-33-39-17-53 110-52Z" />
-          <path class="shipyard-sunset__vessel-keel" d="m150 258 60 22-60 12-60-12 60-22Z" />
-          <path class="shipyard-sunset__vessel-hawseholes" d="m83 189 26-12 11 19-26 12zm134 0-26-12-11 19 26 12z" />
-        </svg>
       </template>
 
       <template v-else-if="animation === 'sail-away'">
@@ -866,126 +783,54 @@ onBeforeUnmount(() => {
 .quiet-handoff__line--two { top: 58%; animation-delay: 260ms; opacity: 0.5; }
 
 
-/* Shipyard sunset — a faithful, front-facing cargo-ship reading of the app icon. */
-.shipyard-sunset__art {
+/* Shipyard sunset — the supplied ShipYard mark is the artwork, not an approximation. */
+.shipyard-sunset__glow {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  top: 50%;
+  left: 50%;
+  width: min(82vw, 760px);
+  aspect-ratio: 1;
+  background: radial-gradient(circle at 50% 43%, rgba(255, 137, 39, 0.28), rgba(174, 40, 76, 0.12) 38%, transparent 68%);
+  border-radius: 50%;
+  filter: blur(18px);
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.92);
+  animation: shipyard-sunset-glow 4400ms 80ms ease-out both;
 }
 
-.shipyard-sunset__reflection-overlay {
+.shipyard-sunset__stage {
   position: absolute;
   z-index: 1;
   inset: 0;
-  pointer-events: none;
+  display: grid;
+  place-items: center;
 }
 
-.shipyard-sunset__reflection-strip {
-  position: absolute;
-  left: 50%;
-  height: clamp(3px, 0.6vh, 6px);
-  border-radius: 999px;
-  box-shadow: 0 0 9px currentColor;
-  transform: translateX(-50%);
+.shipyard-sunset__logo {
+  display: block;
+  width: min(78vw, 680px);
+  max-height: 78vh;
+  object-fit: contain;
+  filter: drop-shadow(0 22px 42px rgba(6, 3, 15, 0.34));
+  opacity: 0;
+  transform-origin: 50% 43%;
+  animation: shipyard-sunset-logo-depart 4400ms 120ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+  user-select: none;
 }
 
-.shipyard-sunset__sun {
-  transform-origin: 600px 285px;
-  animation: sunset-sun-breathe 5200ms 120ms ease-in-out both;
+@keyframes shipyard-sunset-glow {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
+  18% { opacity: 0.84; transform: translate(-50%, -50%) scale(1); }
+  76% { opacity: 0.72; transform: translate(-50%, -50%) scale(1.02); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.08); }
 }
 
-.shipyard-sunset__dock {
-  fill: #0b0a14;
-}
-
-.shipyard-sunset__dock-pier {
-  fill: #0b0a14;
-}
-
-.shipyard-sunset__bollard {
-  fill: none;
-  stroke: #0b0a14;
-  stroke-linecap: square;
-  stroke-width: 7;
-}
-
-.shipyard-sunset__reflection {
-  fill: rgba(255, 123, 45, 0.3);
-  filter: blur(7px);
-  animation: sunset-reflection 4200ms 420ms ease-in-out both;
-}
-
-.shipyard-sunset__ripples path {
-  fill: none;
-  stroke-linecap: round;
-  stroke-width: 3;
-  stroke-dasharray: 9 11;
-  animation: sunset-ripple 4200ms ease-out both;
-}
-
-.shipyard-sunset__vessel {
-  position: absolute;
-  z-index: 2;
-  top: clamp(82px, 12vh, 112px);
-  left: 50%;
-  width: min(34vw, 500px);
-  height: auto;
-  overflow: visible;
-  transform: translateX(-50%);
-  filter: drop-shadow(0 16px 18px rgba(10, 5, 18, 0.28));
-  transform-origin: 50% 42%;
-  animation: shipyard-sunset-depart 5200ms 120ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
-}
-
-.shipyard-sunset__vessel-mast {
-  fill: none;
-  stroke: #0a0a14;
-  stroke-linecap: square;
-  stroke-width: 8;
-}
-
-.shipyard-sunset__vessel-bridge,
-.shipyard-sunset__vessel-hull,
-.shipyard-sunset__vessel-keel {
-  fill: #0a0a14;
-}
-
-.shipyard-sunset__vessel-bridge {
-  stroke: #0a0a14;
-  stroke-width: 2;
-}
-
-.shipyard-sunset__vessel-windows {
-  fill: #ffb32f;
-}
-
-.shipyard-sunset__vessel-hawseholes {
-  fill: #ff8a2b;
-}
-
-@keyframes shipyard-sunset-depart {
-  0% { opacity: 0; transform: translateX(-50%) translateY(8px) scale(1.04); }
-  14% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
-  64% { opacity: 1; transform: translateX(-50%) translateY(-9px) scale(0.9); }
-  100% { opacity: 0; transform: translateX(-50%) translateY(-62px) scale(0.13); }
-}
-
-@keyframes sunset-sun-breathe {
-  0% { opacity: 0.72; transform: scale(0.94); }
-  24% { opacity: 1; transform: scale(1); }
-  100% { opacity: 1; transform: scale(1.02); }
-}
-
-@keyframes sunset-reflection {
-  0%, 100% { opacity: 0.18; transform: scaleX(0.82); }
-  45% { opacity: 0.58; transform: scaleX(1); }
-}
-
-@keyframes sunset-ripple {
-  0% { opacity: 0; stroke-dashoffset: 18; transform: translateY(-3px); }
-  24% { opacity: 0.75; }
-  100% { opacity: 0.36; stroke-dashoffset: 0; transform: translateY(0); }
+@keyframes shipyard-sunset-logo-depart {
+  0% { opacity: 0; transform: scale(0.94); }
+  14% { opacity: 1; transform: scale(1); }
+  60% { opacity: 1; transform: scale(0.97); }
+  82% { opacity: 0.76; transform: scale(0.84); }
+  100% { opacity: 0; transform: scale(0.68); }
 }
 
 /* Sail away — a direct ShipYard/boat nod. */
