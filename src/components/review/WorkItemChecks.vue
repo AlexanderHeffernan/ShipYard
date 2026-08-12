@@ -90,6 +90,13 @@ const readiness = computed(() => {
       description: 'GitHub reports no known check, review, or mergeability blocker for this pull request.',
     };
   }
+  if (pullRequest.mergeState === 'ready' && checks.value?.overallState === 'unknown') {
+    return {
+      tone: 'neutral',
+      title: 'Mergeable, but checks are not visible',
+      description: 'GitHub reports this pull request can merge cleanly, but Shipyard cannot confirm required checks from the current response. Verify required checks on GitHub before merging.',
+    };
+  }
   return {
     tone: 'neutral',
     title: 'Merge readiness is not fully known',

@@ -99,4 +99,22 @@ describe('WorkItemChecks', () => {
     await flushPromises();
     expect(wrapper.text()).toContain('Ready to merge');
   });
+
+  it('qualifies mergeability when GitHub reports no visible checks', async () => {
+    getChecks.mockResolvedValue({
+      overallState: 'unknown',
+      total: 0,
+      passed: 0,
+      failed: 0,
+      pending: 0,
+      neutral: 0,
+      lastUpdatedAt: null,
+      checks: [],
+    });
+    const wrapper = mount(WorkItemChecks, { props: { project, workItem } });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('Mergeable, but checks are not visible');
+    expect(wrapper.text()).toContain('Verify required checks on GitHub before merging.');
+  });
 });

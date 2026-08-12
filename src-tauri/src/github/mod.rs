@@ -661,28 +661,26 @@ fn timeline_message(event: &str, label: Option<&GhLabel>) -> Option<String> {
 }
 
 fn paginate<T: DeserializeOwned>(path: &str, endpoint: &str, operation: &str) -> Result<Vec<T>, String> {
-    let response = command(path, None, &["api", "--paginate", "--slurp", endpoint])
+    // `--slurp` was added after the oldest GitHub CLI version Shipyard supports. Ask gh to
+    // emit each array item instead, then parse the JSON stream so pagination works with both
+    // older and newer CLI releases.
+    let response = command(path, None, &["api", "--paginate", "--jq", ".[]", endpoint])
         .map_err(|error| github_api_error(error, operation))?;
-    let value = serde_json::from_str::<Value>(&response)
-        .map_err(|error| github_api_error(error.to_string(), operation))?;
-    let values = paginated_values(value);
-    values
+    parse_paginated_values(&response, operation)?
         .into_iter()
         .map(|value| serde_json::from_value(value).map_err(|error| github_api_error(error.to_string(), operation)))
         .collect()
 }
 
-fn paginated_values(value: Value) -> Vec<Value> {
-    match value {
-        Value::Array(pages) => pages
-            .into_iter()
-            .flat_map(|page| match page {
-                Value::Array(items) => items,
-                item => vec![item],
-            })
-            .collect(),
-        item => vec![item],
-    }
+fn parse_paginated_values(response: &str, operation: &str) -> Result<Vec<Value>, String> {
+    response
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| {
+            serde_json::from_str::<Value>(line)
+                .map_err(|error| github_api_error(error.to_string(), operation))
+        })
+        .collect()
 }
 
 fn github_api_error(error: String, operation: &str) -> String {
@@ -892,10 +890,7 @@ fn git_text(root: &Path, args: &[&str]) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        github_api_error, paginated_values, parse_repository, summarize_checks, GhCheck,
-    };
-    use serde_json::json;
+    use super::{github_api_error, parse_paginated_values, parse_repository, summarize_checks, GhCheck};
 
     #[test]
     fn parses_supported_github_remotes() {
@@ -960,9 +955,10 @@ mod tests {
     }
 
     #[test]
-    fn flattens_paginated_json_without_losing_single_page_responses() {
-        assert_eq!(paginated_values(json!([[{"id": 1}], [{"id": 2}]])), vec![json!({"id": 1}), json!({"id": 2})]);
-        assert_eq!(paginated_values(json!([{"id": 1}])), vec![json!({"id": 1})]);
+    fn parses_paginated_json_items_emitted_by_supported_gh_versions() {
+        let values = parse_paginated_values("{\"id\":1}\n{\"id\":2}\n", "load comments").unwrap();
+        assert_eq!(values, vec![serde_json::json!({"id": 1}), serde_json::json!({"id": 2})]);
+        assert!(parse_paginated_values("not json", "load comments").is_err());
     }
 
     #[test]
