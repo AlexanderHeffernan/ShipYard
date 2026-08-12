@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Shipyard Native App</title>
+    <style>
+      html, body, #screen {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        background: #111318;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="screen"></div>
+    <script type="module">
+      import RFB from './core/rfb.js';
+
+      const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
+      const rfb = new RFB(
+        document.getElementById('screen'),
+        `${scheme}://${location.host}/websockify`,
+      );
+      rfb.scaleViewport = true;
+      rfb.resizeSession = false;
+      rfb.focusOnClick = true;
+    </script>
+  </body>
+</html>

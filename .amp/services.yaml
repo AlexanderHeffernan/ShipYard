@@ -1,0 +1,6 @@
+services:
+  visual:
+    command: .agents/visual-service
+    portal:
+      title: Shipyard Native App
+      description: Interact with the real Tauri app running on a virtual Linux desktop.

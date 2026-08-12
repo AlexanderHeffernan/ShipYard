@@ -34,3 +34,25 @@ npm run build
 cargo test --manifest-path src-tauri/Cargo.toml
 cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 ```
+
+### Visual validation in Amp orbs
+
+Fresh Amp orbs include a virtual Linux desktop for running and reviewing the real Tauri app. Start
+the supervised app and noVNC portal with:
+
+```sh
+amp orb services ensure
+```
+
+The command prints the **Shipyard Native App** portal URL. The portal is interactive and displays
+the Tauri window running on display `:99`. Agents can automate the app with `DISPLAY=:99 xdotool`
+and capture review artifacts with:
+
+```sh
+.agents/capture-screenshot
+.agents/capture-recording 10
+```
+
+Both capture commands print the generated path under `.amp/in/artifacts/`. This Linux environment
+can validate the shared Tauri UI and backend behavior, but actions explicitly implemented only for
+macOS still require validation on macOS.

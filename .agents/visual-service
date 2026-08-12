@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$repo_root"
+export PATH="$HOME/.cargo/bin:$PATH"
+export DISPLAY="${DISPLAY:-:99}"
+export WEBKIT_DISABLE_COMPOSITING_MODE=1
+
+: "${PORT:?Amp must provide PORT}"
+
+pids=()
+cleanup() {
+  trap - EXIT INT TERM
+  if ((${#pids[@]})); then
+    kill "${pids[@]}" 2>/dev/null || true
+    wait "${pids[@]}" 2>/dev/null || true
+  fi
+}
+trap cleanup EXIT INT TERM
+
+rm -f "/tmp/.X${DISPLAY#:}-lock" "/tmp/.X11-unix/X${DISPLAY#:}"
+Xvfb "$DISPLAY" -screen 0 1440x900x24 -nolisten tcp &
+pids+=("$!")
+
+for _ in {1..50}; do
+  xdpyinfo -display "$DISPLAY" >/dev/null 2>&1 && break
+  sleep 0.1
+done
+xdpyinfo -display "$DISPLAY" >/dev/null
+
+openbox &
+pids+=("$!")
+
+npm run tauri dev -- --no-watch &
+pids+=("$!")
+
+x11vnc -display "$DISPLAY" -localhost -forever -shared -nopw -rfbport 5900 &
+pids+=("$!")
+
+web_root="${TMPDIR:-/tmp}/shipyard-novnc"
+mkdir -p "$web_root"
+ln -sfn /usr/share/novnc/core "$web_root/core"
+cp .agents/visual-portal.html "$web_root/index.html"
+websockify --web="$web_root" "$PORT" localhost:5900 &
+pids+=("$!")
+
+wait -n "${pids[@]}"

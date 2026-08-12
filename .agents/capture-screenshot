@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$repo_root"
+export DISPLAY="${DISPLAY:-:99}"
+
+output="${1:-.amp/in/artifacts/shipyard-$(date +%Y%m%d-%H%M%S).png}"
+mkdir -p "$(dirname "$output")"
+import -display "$DISPLAY" -window root "$output"
+printf '%s\n' "$output"
