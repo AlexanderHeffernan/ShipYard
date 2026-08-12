@@ -30,6 +30,7 @@ npm run tauri dev
 Validation:
 
 ```sh
+npm test
 npm run build
 cargo test --manifest-path src-tauri/Cargo.toml
 cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
@@ -83,3 +84,10 @@ zoomed, pannable view and **Fit screen** to see the whole app. Agents can automa
 Both capture commands print the generated path under `.amp/in/artifacts/`. This Linux environment
 can validate the shared Tauri UI and backend behavior, but actions explicitly implemented only for
 macOS still require validation on macOS.
+
+## Project identity customization
+
+Open the **Projects** dropdown and click a project’s identity icon to customize its generated color
+or select an image. Changes are saved per project in the local account storage. The image picker
+accepts PNG, JPG, GIF, WebP, and AVIF files up to 2 MB; invalid files are rejected inline. Removing
+a project also removes its saved identity customization.

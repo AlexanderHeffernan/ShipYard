@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import type { Project, WorkItem } from '../../types/projects';
+import ProjectIcon from '../ui/ProjectIcon.vue';
 import { pullRequestSyncLabel, pullRequestSyncState, workItemKind, workItemMeta, workItemTitle } from '../../utils/workItems';
 import OpenAction from './OpenAction.vue';
 import RunAction from './RunAction.vue';
@@ -36,7 +37,7 @@ const statusClass = computed(() => {
   <header class="work-header" :class="{ 'work-header--sidebar-closed': !sidebarOpen }">
     <div class="work-header__primary">
       <div class="work-header__identity">
-        <span class="work-header__dot" :style="{ background: project.color }"></span>
+        <ProjectIcon :color="project.color" :image="project.image" size="medium" />
         <h1>{{ title }}</h1>
       </div>
 
@@ -92,14 +93,6 @@ const statusClass = computed(() => {
   gap: 8px;
   min-width: 0;
   pointer-events: none;
-}
-
-.work-header__dot {
-  flex: 0 0 auto;
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.24);
 }
 
 .work-header h1 {

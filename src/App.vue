@@ -34,6 +34,7 @@ const {
   addProject,
   rescanProject,
   removeProject,
+  updateProjectIdentity,
   disposeProjects,
 } = useProjects();
 const { startAutomaticChecks, stopAutomaticChecks } = useUpdates();
@@ -162,6 +163,7 @@ const deletionConfirmLabel = computed(() => {
         @add="addProject"
         @remove="removeProject"
         @settings="openProjectSettings"
+        @identity="updateProjectIdentity"
       />
     </div>
 
