@@ -42,10 +42,8 @@ const statusClass = computed(() => {
 
       <div class="work-header__actions">
         <CheckoutAction v-if="workItem.pullRequest && !workItem.worktreePath" :project="project" :work-item="workItem" @checked-out="emit('refresh')" />
-        <template v-else>
-          <OpenAction :project="project" :work-item="workItem" @settings="emit('settings', 'open')" />
-          <RunAction :project="project" :work-item="workItem" @settings="emit('settings', $event)" />
-        </template>
+        <OpenAction :project="project" :work-item="workItem" @settings="emit('settings', 'open')" />
+        <RunAction v-if="workItem.worktreePath" :project="project" :work-item="workItem" @settings="emit('settings', $event)" />
         <ShipAction :project="project" :work-item="workItem" @refresh="emit('refresh')" />
       </div>
     </div>
