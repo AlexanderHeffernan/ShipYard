@@ -6,6 +6,7 @@ cd "$repo_root"
 export PATH="$HOME/.cargo/bin:$PATH"
 export DISPLAY="${DISPLAY:-:99}"
 export WEBKIT_DISABLE_COMPOSITING_MODE=1
+vnc_port=5901
 
 : "${PORT:?Amp must provide PORT}"
 
@@ -35,7 +36,7 @@ pids+=("$!")
 npm run tauri dev -- --no-watch &
 pids+=("$!")
 
-x11vnc -display "$DISPLAY" -localhost -forever -shared -nopw -rfbport 5900 &
+x11vnc -display "$DISPLAY" -localhost -forever -shared -nopw -rfbport "$vnc_port" &
 pids+=("$!")
 
 web_root="${TMPDIR:-/tmp}/shipyard-novnc"
@@ -43,7 +44,7 @@ mkdir -p "$web_root"
 ln -sfn /usr/share/novnc/core "$web_root/core"
 ln -sfn /usr/share/novnc/vendor "$web_root/vendor"
 cp .agents/visual-portal.html "$web_root/index.html"
-websockify --web="$web_root" "$PORT" localhost:5900 &
+websockify --web="$web_root" "$PORT" "127.0.0.1:$vnc_port" &
 pids+=("$!")
 
 wait -n "${pids[@]}"
