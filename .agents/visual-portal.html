@@ -12,13 +12,26 @@
         overflow: hidden;
         background: #111318;
       }
+
+      #status {
+        position: fixed;
+        z-index: 1;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        color: #f4f5f7;
+        font: 16px/1.5 system-ui, sans-serif;
+        text-align: center;
+      }
     </style>
   </head>
   <body>
+    <div id="status">Connecting to the Shipyard desktop…</div>
     <div id="screen"></div>
     <script type="module">
       import RFB from './core/rfb.js';
 
+      const status = document.getElementById('status');
       const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
       const rfb = new RFB(
         document.getElementById('screen'),
@@ -27,6 +40,17 @@
       rfb.scaleViewport = true;
       rfb.resizeSession = false;
       rfb.focusOnClick = true;
+      rfb.addEventListener('connect', () => status.hidden = true);
+      rfb.addEventListener('disconnect', (event) => {
+        status.hidden = false;
+        status.textContent = event.detail.clean
+          ? 'The Shipyard desktop disconnected. Reload to reconnect.'
+          : 'Could not connect to the Shipyard desktop. Reload to retry.';
+      });
+      rfb.addEventListener('securityfailure', () => {
+        status.hidden = false;
+        status.textContent = 'The Shipyard desktop rejected the connection.';
+      });
     </script>
   </body>
 </html>

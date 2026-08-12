@@ -41,6 +41,7 @@ pids+=("$!")
 web_root="${TMPDIR:-/tmp}/shipyard-novnc"
 mkdir -p "$web_root"
 ln -sfn /usr/share/novnc/core "$web_root/core"
+ln -sfn /usr/share/novnc/vendor "$web_root/vendor"
 cp .agents/visual-portal.html "$web_root/index.html"
 websockify --web="$web_root" "$PORT" localhost:5900 &
 pids+=("$!")
