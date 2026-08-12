@@ -251,7 +251,7 @@ mod tests {
         let executable = bin.join("amp");
         fs::create_dir_all(&bin).unwrap();
         fs::write(
-            &home.join(".zshrc"),
+            home.join(".zshrc"),
             "export PATH=\"$HOME/bin:/usr/bin:/bin\"\n",
         )
         .unwrap();

@@ -7,6 +7,7 @@ import AppSidebar from './components/sidebar/AppSidebar.vue';
 import ProjectSwitcher from './components/sidebar/ProjectSwitcher.vue';
 import ConfirmationDialog from './components/ui/ConfirmationDialog.vue';
 import { useProjects } from './composables/useProjects';
+import { useNotifications } from './composables/useNotifications';
 import { useUpdates } from './composables/useUpdates';
 import { deleteWorkItem, inspectWorkItemDeletion } from './services/projects';
 import type { DeleteWorkItemRequest, DeletionPlan, Project, WorkItem } from './types/projects';
@@ -17,6 +18,7 @@ const selectedWorkItemId = ref<string | null>(null);
 const settingsProject = ref<Project | null>(null);
 const settingsSection = ref<'open' | 'run'>('run');
 const appSettingsOpen = ref(false);
+const notificationsReady = ref(false);
 const deletion = ref<{
   project: Project;
   item: WorkItem;
@@ -31,11 +33,13 @@ const {
   loading,
   error,
   loadProjects,
+  refreshAllProjects,
   addProject,
   rescanProject,
   removeProject,
   disposeProjects,
 } = useProjects();
+const notifications = useNotifications();
 const { startAutomaticChecks, stopAutomaticChecks } = useUpdates();
 const selection = computed(() => {
   for (const project of projects.value) {
@@ -45,14 +49,26 @@ const selection = computed(() => {
   return null;
 });
 
+async function initializeApp() {
+  await loadProjects();
+  await notifications.loadSettings();
+  notificationsReady.value = true;
+  await notifications.observeProjects(projects.value);
+  notifications.startPolling(refreshAllProjects);
+}
+
 onMounted(() => {
-  void loadProjects();
+  void initializeApp();
   startAutomaticChecks();
 });
 onBeforeUnmount(() => {
   disposeProjects();
+  notifications.stopPolling();
   stopAutomaticChecks();
 });
+watch(projects, (value) => {
+  if (notificationsReady.value) void notifications.observeProjects(value);
+}, { deep: true });
 watch(selection, (current) => {
   if (selectedWorkItemId.value && !current) selectedWorkItemId.value = null;
 });

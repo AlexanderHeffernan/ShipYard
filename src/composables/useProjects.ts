@@ -50,7 +50,7 @@ export function useProjects() {
   let stopListening: (() => void) | null = null;
 
   function refreshAllProjects() {
-    for (const project of projects.value) void refreshProject(project.id);
+    return Promise.all(projects.value.map((project) => refreshProject(project.id))).then(() => undefined);
   }
 
   async function refreshProject(id: string) {
@@ -165,6 +165,7 @@ export function useProjects() {
     loading,
     error,
     loadProjects,
+    refreshAllProjects,
     addProject,
     rescanProject,
     removeProject,

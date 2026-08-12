@@ -10,6 +10,7 @@ pub(crate) struct PullRequest {
     pub(crate) draft: bool,
     pub(crate) mergeable: Option<bool>,
     pub(crate) merge_state: String,
+    pub(crate) attention_state: String,
     pub(crate) head_branch: String,
     pub(crate) base_branch: String,
     pub(crate) head_sha: String,
