@@ -9,6 +9,7 @@ mod diff_stats;
 mod diff_view;
 mod project;
 mod references;
+mod remote;
 mod repository;
 mod scanner;
 mod work_item;

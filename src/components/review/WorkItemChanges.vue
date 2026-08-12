@@ -244,6 +244,8 @@ async function loadDiff() {
       headSha: props.workItem.headSha,
       defaultBranch: props.project.defaultBranch,
       pullRequestNumber: props.workItem.pullRequest?.number ?? null,
+      pullRequestBaseBranch: props.workItem.pullRequest?.baseBranch ?? null,
+      pullRequestHeadSha: props.workItem.pullRequest?.headSha ?? null,
     });
     if (version !== requestVersion) return;
     const parsed = parsePatchFiles(result.patch, props.workItem.headSha, true);

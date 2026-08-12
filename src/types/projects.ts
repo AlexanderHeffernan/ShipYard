@@ -8,6 +8,7 @@ export type PullRequest = {
   mergeable: boolean | null;
   mergeState: 'ready' | 'checksPending' | 'checksFailed' | 'reviewRequired' | 'conflicting' | 'draft';
   headBranch: string;
+  baseBranch: string;
   headSha: string;
   localCommits: number;
   remoteCommits: number;
@@ -60,6 +61,8 @@ export type WorkItemDiffRequest = {
   headSha: string;
   defaultBranch: string | null;
   pullRequestNumber: number | null;
+  pullRequestBaseBranch: string | null;
+  pullRequestHeadSha: string | null;
 };
 
 export type WorkItemDiff = {

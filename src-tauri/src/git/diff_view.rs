@@ -1,4 +1,4 @@
-use super::{command, repository};
+use super::{command, remote, repository};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
@@ -13,6 +13,10 @@ pub struct WorkItemDiffRequest {
     pub(super) default_branch: Option<String>,
     #[serde(default)]
     pub(super) pull_request_number: Option<u64>,
+    #[serde(default)]
+    pub(super) pull_request_base_branch: Option<String>,
+    #[serde(default)]
+    pub(super) pull_request_head_sha: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -20,6 +24,12 @@ pub struct WorkItemDiffRequest {
 pub struct WorkItemDiff {
     pub(super) patch: String,
     pub(super) comparison_label: String,
+}
+
+struct DiffReferences {
+    base: String,
+    head: Option<String>,
+    label: String,
 }
 
 pub fn read(request: WorkItemDiffRequest) -> Result<WorkItemDiff, String> {
@@ -33,10 +43,9 @@ pub fn read(request: WorkItemDiffRequest) -> Result<WorkItemDiff, String> {
         .as_deref()
         .map(|path| repository::validate_worktree(&request.project_id, path))
         .transpose()?;
-    ensure_head_available(&project_root, checkout.as_deref(), &request)?;
     validate_target(&project_root, checkout.as_deref(), &request)?;
 
-    let (base, comparison_label) = comparison_base(&project_root, &request)?;
+    let references = comparison_references(&project_root, checkout.as_deref(), &request)?;
     let mut args = vec![
         "diff",
         "--no-ext-diff",
@@ -45,10 +54,10 @@ pub fn read(request: WorkItemDiffRequest) -> Result<WorkItemDiff, String> {
         "--binary",
         "--full-index",
         "--unified=5",
-        &base,
+        &references.base,
     ];
     if checkout.is_none() {
-        args.push(&request.head_sha);
+        args.push(references.head.as_deref().unwrap_or(&request.head_sha));
     }
     args.push("--");
 
@@ -60,47 +69,35 @@ pub fn read(request: WorkItemDiffRequest) -> Result<WorkItemDiff, String> {
 
     Ok(WorkItemDiff {
         patch,
-        comparison_label,
+        comparison_label: references.label,
     })
 }
 
-fn ensure_head_available(
+fn comparison_references(
     project_root: &Path,
     checkout: Option<&Path>,
     request: &WorkItemDiffRequest,
-) -> Result<(), String> {
-    if checkout.is_some()
-        || request.branch.is_some()
-        || commit_exists(project_root, &request.head_sha)
-    {
-        return Ok(());
+) -> Result<DiffReferences, String> {
+    if let Some(number) = request.pull_request_number {
+        return pull_request_references(project_root, checkout, request, number);
     }
 
-    let Some(number) = request.pull_request_number else {
-        return Err(
-            "The pull request commit is not available locally. Refresh the project and try again."
-                .to_owned(),
-        );
+    let Some(default_branch) = request.default_branch.as_deref() else {
+        return Ok(DiffReferences {
+            base: request.head_sha.clone(),
+            head: None,
+            label: "working tree".to_owned(),
+        });
     };
-    let reference = format!("refs/shipyard/pull-requests/{number}/head");
-    let refspec = format!("+refs/pull/{number}/head:{reference}");
-    command::output(project_root, &["fetch", "--no-tags", "origin", &refspec])
-        .map_err(|error| format!("Could not fetch pull request #{number} for review: {error}"))?;
-
-    let fetched_sha = command::text(
-        project_root,
-        &["rev-parse", "--verify", &format!("{reference}^{{commit}}")],
-    )?;
-    if fetched_sha.trim() != request.head_sha {
-        return Err(
-            "The pull request changed on GitHub. Refresh the project and try again.".to_owned(),
-        );
+    if request.branch.as_deref() == Some(default_branch) {
+        return Ok(DiffReferences {
+            base: request.head_sha.clone(),
+            head: None,
+            label: "working tree".to_owned(),
+        });
     }
-    Ok(())
-}
 
-fn commit_exists(root: &Path, sha: &str) -> bool {
-    command::optional_text(root, &["cat-file", "-e", &format!("{sha}^{{commit}}")]).is_some()
+    local_branch_references(project_root, default_branch, &request.head_sha)
 }
 
 fn validate_target(
@@ -136,20 +133,102 @@ fn validate_target(
     Ok(())
 }
 
-fn comparison_base(
+fn pull_request_references(
     project_root: &Path,
+    checkout: Option<&Path>,
     request: &WorkItemDiffRequest,
-) -> Result<(String, String), String> {
-    let Some(default_branch) = request.default_branch.as_deref() else {
-        return Ok((request.head_sha.clone(), "working tree".to_owned()));
+    number: u64,
+) -> Result<DiffReferences, String> {
+    let base_branch = request
+        .pull_request_base_branch
+        .as_deref()
+        .or(request.default_branch.as_deref())
+        .ok_or_else(|| format!("Pull request #{number} does not specify a base branch"))?;
+    let base_reference = remote::pull_request_base_reference(number);
+    let base_cached = remote::cached_commit(project_root, &base_reference);
+    let base_source = match remote::fetch_branch(
+        project_root,
+        base_branch,
+        &base_reference,
+        &format!("the base branch {base_branch} for pull request #{number}"),
+    ) {
+        Ok(_) => "remote",
+        Err(_error) if base_cached.is_some() => "cached",
+        Err(error) => return Err(error),
     };
-    if request.branch.as_deref() == Some(default_branch) {
-        return Ok((request.head_sha.clone(), "working tree".to_owned()));
-    }
 
-    let reference = format!("refs/heads/{default_branch}");
-    let base = command::text(project_root, &["merge-base", &reference, &request.head_sha])?;
-    Ok((base.trim().to_owned(), default_branch.to_owned()))
+    let head_reference = remote::pull_request_head_reference(number);
+    let expected_head = request
+        .pull_request_head_sha
+        .as_deref()
+        .unwrap_or(&request.head_sha);
+    let use_remote_head = checkout.is_none() && request.branch.is_none();
+    let head_cached = remote::cached_commit(project_root, &head_reference);
+    let head = match remote::fetch_pull_request_head(project_root, number, &head_reference) {
+        Ok(fetched) if fetched == expected_head => Some(head_reference),
+        Ok(_) if use_remote_head => {
+            return Err(
+                "The pull request changed on GitHub. Refresh the project and try again.".to_owned(),
+            )
+        }
+        Ok(_) => None,
+        Err(_error) if use_remote_head && head_cached.as_deref() == Some(expected_head) => {
+            Some(head_reference)
+        }
+        Err(error) if use_remote_head => return Err(error),
+        Err(_) => None,
+    };
+    let merge_head = head.as_deref().unwrap_or(&request.head_sha);
+    let base = merge_base(project_root, &base_reference, merge_head)?;
+
+    Ok(DiffReferences {
+        base,
+        head,
+        label: match base_source {
+            "remote" => base_branch.to_owned(),
+            _ => format!("{base_branch} (cached)"),
+        },
+    })
+}
+
+fn local_branch_references(
+    project_root: &Path,
+    default_branch: &str,
+    head_sha: &str,
+) -> Result<DiffReferences, String> {
+    let remote_reference = remote::base_reference(default_branch);
+    let cached = remote::cached_commit(project_root, &remote_reference);
+    let local_reference = format!("refs/heads/{default_branch}");
+    let local = remote::cached_commit(project_root, &local_reference);
+    let source = match remote::fetch_branch(
+        project_root,
+        default_branch,
+        &remote_reference,
+        &format!("the remote base branch {default_branch}"),
+    ) {
+        Ok(_) => "remote",
+        Err(_error) if cached.is_some() => "cached",
+        Err(_error) if local.is_some() => "local",
+        Err(error) => return Err(error),
+    };
+    let base = match source {
+        "remote" | "cached" => remote_reference,
+        _ => local_reference,
+    };
+    Ok(DiffReferences {
+        base: merge_base(project_root, &base, head_sha)?,
+        head: None,
+        label: match source {
+            "remote" => default_branch.to_owned(),
+            "cached" => format!("{default_branch} (cached)"),
+            _ if remote::has_origin(project_root) => format!("{default_branch} (local)"),
+            _ => default_branch.to_owned(),
+        },
+    })
+}
+
+fn merge_base(root: &Path, base: &str, head: &str) -> Result<String, String> {
+    command::text(root, &["merge-base", base, head]).map(|value| value.trim().to_owned())
 }
 
 fn append_untracked_files(root: &Path, patch: &mut String) -> Result<(), String> {
