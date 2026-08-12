@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { Check, X } from '@lucide/vue';
 import { computed, onBeforeUnmount, onMounted, ref, useId } from 'vue';
-import type { CompletionAnimation } from '../../types/celebration';
+import {
+  isFullScreenCompletionAnimation,
+  type CompletionAnimation,
+} from '../../types/celebration';
 import type { ShippingCompletion } from '../../composables/useShippingCompletion';
 
 const props = defineProps<{
@@ -15,7 +18,9 @@ const descriptionId = useId();
 const root = ref<HTMLElement>();
 const closeButton = ref<HTMLButtonElement>();
 const reducedMotion = ref(false);
+const closing = ref(false);
 const animation = computed<CompletionAnimation>(() => props.completion.animation);
+const quietHandoff = computed(() => !isFullScreenCompletionAnimation(animation.value));
 const confettiPieces = Array.from({ length: 28 }, (_, index) => ({
   id: index,
   x: `${((index * 47) % 360) - 180}px`,
@@ -47,10 +52,19 @@ const fireworkAngles = Array.from({ length: 12 }, (_, index) => `${index * 30}de
 const copy = computed(() => {
   if (props.completion.preview) {
     return {
-      eyebrow: 'Animation preview',
+      eyebrow: 'Completion animation preview',
       title: 'Ship it with confidence',
       detail: 'This is a preview only. No branch, worktree, or remote state changed.',
       announcement: `Previewing the ${animation.value} completion animation. No project state changed.`,
+    };
+  }
+
+  if (quietHandoff.value) {
+    return {
+      eyebrow: 'Shipped',
+      title: 'Work item shipped',
+      detail: 'The changes are safely on their way. Pick your next item when you’re ready.',
+      announcement: 'Shipping completed successfully. The work item was shipped.',
     };
   }
 
@@ -87,6 +101,7 @@ const copy = computed(() => {
 });
 
 let closeTimer: number | undefined;
+let exitTimer: number | undefined;
 let mediaQuery: MediaQueryList | null = null;
 let previousFocus: HTMLElement | null = null;
 
@@ -94,16 +109,18 @@ function updateReducedMotion() {
   reducedMotion.value = mediaQuery?.matches ?? false;
 }
 
-function close() {
+function requestClose() {
+  if (closing.value) return;
   window.clearTimeout(closeTimer);
-  emit('close');
+  closing.value = true;
+  exitTimer = window.setTimeout(() => emit('close'), reducedMotion.value ? 120 : 360);
 }
 
 function onKeydown(event: KeyboardEvent) {
   if (event.key === 'Escape') {
     event.preventDefault();
     event.stopPropagation();
-    close();
+    requestClose();
     return;
   }
   if (event.key !== 'Tab') return;
@@ -127,11 +144,12 @@ onMounted(() => {
   mediaQuery.addEventListener?.('change', updateReducedMotion);
   window.addEventListener('keydown', onKeydown);
   closeButton.value?.focus({ preventScroll: true });
-  closeTimer = window.setTimeout(close, reducedMotion.value ? 3200 : 5200);
+  closeTimer = window.setTimeout(requestClose, reducedMotion.value ? 1800 : quietHandoff.value ? 2900 : 5200);
 });
 
 onBeforeUnmount(() => {
   window.clearTimeout(closeTimer);
+  window.clearTimeout(exitTimer);
   mediaQuery?.removeEventListener?.('change', updateReducedMotion);
   window.removeEventListener('keydown', onKeydown);
   if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
@@ -143,23 +161,25 @@ onBeforeUnmount(() => {
     ref="root"
     data-modal-layer="top"
     class="celebration"
-    :class="[`celebration--${animation}`, { 'celebration--reduced': reducedMotion }]"
+    :class="[`celebration--${animation}`, { 'celebration--preview': completion.preview, 'celebration--reduced': reducedMotion, 'celebration--closing': closing }]"
     role="dialog"
     aria-modal="true"
-    :aria-labelledby="titleId"
-    :aria-describedby="descriptionId"
+    :aria-labelledby="completion.preview ? undefined : titleId"
+    :aria-describedby="completion.preview ? undefined : descriptionId"
+    :aria-label="completion.preview ? 'Completion animation preview' : undefined"
     @keydown="onKeydown"
-    @click.self="close"
+    @click.self="requestClose"
   >
     <div class="celebration__backdrop" aria-hidden="true"></div>
 
     <div class="celebration__scene" aria-hidden="true">
-      <template v-if="animation === 'harbor-glow'">
-        <div class="harbor-glow__halo"></div>
-        <div class="harbor-glow__ring harbor-glow__ring--one"></div>
-        <div class="harbor-glow__ring harbor-glow__ring--two"></div>
-        <div class="harbor-glow__ring harbor-glow__ring--three"></div>
-        <span v-for="piece in stars.slice(0, 9)" :key="piece.id" class="harbor-glow__spark" :style="{ left: piece.x, top: piece.y, animationDelay: piece.delay }"></span>
+      <template v-if="animation === 'quiet-handoff'">
+        <div class="quiet-handoff__glow"></div>
+        <div class="quiet-handoff__line quiet-handoff__line--one"></div>
+        <div class="quiet-handoff__line quiet-handoff__line--two"></div>
+        <div v-if="completion.preview" class="quiet-handoff__preview-mark">
+          <Check aria-hidden="true" />
+        </div>
       </template>
 
       <template v-else-if="animation === 'sail-away'">
@@ -270,7 +290,7 @@ onBeforeUnmount(() => {
       </template>
     </div>
 
-    <section class="celebration__content">
+    <section v-if="!completion.preview" class="celebration__content" :class="{ 'celebration__content--quiet': quietHandoff }">
       <div class="celebration__success-mark">
         <span class="celebration__success-ring celebration__success-ring--one"></span>
         <span class="celebration__success-ring celebration__success-ring--two"></span>
@@ -279,12 +299,23 @@ onBeforeUnmount(() => {
       <span class="celebration__eyebrow"><i></i>{{ copy.eyebrow }}</span>
       <h1 :id="titleId">{{ copy.title }}</h1>
       <p :id="descriptionId">{{ copy.detail }}</p>
-      <small v-if="completion.preview" class="celebration__preview-note">Preview only · no project changes</small>
-      <button ref="closeButton" class="celebration__dismiss" type="button" @click="close">
-        <span>{{ completion.preview ? 'Back to settings' : 'Done' }}</span>
+      <button ref="closeButton" class="celebration__dismiss" type="button" @click="requestClose">
+        <span>Done</span>
         <X aria-hidden="true" />
       </button>
     </section>
+
+    <button
+      v-if="completion.preview"
+      ref="closeButton"
+      class="celebration__preview-dismiss"
+      type="button"
+      aria-label="Close animation preview"
+      title="Close animation preview"
+      @click="requestClose"
+    >
+      <X aria-hidden="true" />
+    </button>
 
     <p class="sr-only" role="status" aria-live="assertive">{{ copy.announcement }}</p>
   </div>
@@ -307,6 +338,28 @@ onBeforeUnmount(() => {
   background: #100d18;
   isolation: isolate;
   animation: celebration-in 360ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+}
+
+.celebration--quiet-handoff {
+  position: absolute;
+  z-index: 60;
+  inset: 0;
+  background: transparent;
+  pointer-events: none;
+}
+
+.celebration--quiet-handoff .celebration__backdrop {
+  display: none;
+}
+
+.celebration--quiet-handoff.celebration--preview .quiet-handoff__glow,
+.celebration--quiet-handoff.celebration--preview .quiet-handoff__line {
+  display: none;
+}
+
+.celebration--closing {
+  animation: celebration-out 360ms ease both;
+  pointer-events: none;
 }
 
 .celebration__backdrop,
@@ -354,6 +407,10 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
+.celebration--quiet-handoff .celebration__scene {
+  z-index: 0;
+}
+
 .celebration__content {
   position: relative;
   z-index: 3;
@@ -371,6 +428,18 @@ onBeforeUnmount(() => {
   animation: celebration-card-in 650ms 70ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
 }
 
+.celebration--quiet-handoff .celebration__content {
+  pointer-events: auto;
+}
+
+.celebration__content--quiet {
+  width: min(320px, calc(100vw - 42px));
+  padding: 24px 26px 22px;
+  border-radius: 16px;
+  box-shadow: 0 18px 58px rgba(5, 3, 8, 0.42), inset 0 1px rgba(255, 255, 255, 0.06);
+  animation: quiet-receipt-in 460ms 80ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+}
+
 .celebration__success-mark {
   position: relative;
   display: grid;
@@ -384,6 +453,27 @@ onBeforeUnmount(() => {
   border-radius: 24px;
   box-shadow: 0 0 0 8px rgba(251, 119, 31, 0.08), 0 12px 34px rgba(251, 119, 31, 0.25), inset 0 1px rgba(255, 255, 255, 0.42);
   transform: rotate(-4deg);
+}
+
+.celebration__content--quiet .celebration__success-mark {
+  width: 58px;
+  height: 58px;
+  margin-bottom: 14px;
+  border-radius: 18px;
+  transform: none;
+}
+
+.celebration__content--quiet .celebration__success-mark svg {
+  width: 28px;
+  height: 28px;
+}
+
+.celebration__content--quiet .celebration__success-ring {
+  display: none;
+}
+
+.celebration__content--quiet .celebration__dismiss {
+  margin-top: 18px;
 }
 
 .celebration__success-mark svg {
@@ -486,6 +576,43 @@ onBeforeUnmount(() => {
   stroke-width: 2;
 }
 
+.celebration__preview-dismiss {
+  position: absolute;
+  z-index: 5;
+  top: 18px;
+  right: 18px;
+  display: grid;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  place-items: center;
+  color: rgba(255, 250, 252, 0.74);
+  background: rgba(16, 13, 24, 0.56);
+  border: 1px solid rgba(255, 240, 248, 0.16);
+  border-radius: 50%;
+  box-shadow: 0 8px 24px rgba(5, 3, 8, 0.24);
+  backdrop-filter: blur(12px);
+  pointer-events: auto;
+  transition: color 140ms ease, background 140ms ease, border-color 140ms ease, opacity 180ms ease;
+}
+
+.celebration__preview-dismiss:hover {
+  color: var(--text-primary);
+  background: rgba(251, 119, 31, 0.18);
+  border-color: rgba(251, 119, 31, 0.4);
+}
+
+.celebration__preview-dismiss:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+.celebration__preview-dismiss svg {
+  width: 15px;
+  height: 15px;
+  stroke-width: 1.8;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
@@ -497,42 +624,65 @@ onBeforeUnmount(() => {
   border: 0;
 }
 
-/* Harbor glow — the restrained default. */
-.harbor-glow__halo {
+/* Quiet handoff — the unobtrusive default. */
+.quiet-handoff__glow {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: min(48vw, 580px);
+  width: min(52vw, 560px);
   aspect-ratio: 1;
-  background: radial-gradient(circle, rgba(251, 119, 31, 0.2), rgba(251, 119, 31, 0.04) 34%, transparent 68%);
+  background: radial-gradient(circle, rgba(251, 119, 31, 0.17), rgba(251, 119, 31, 0.04) 38%, transparent 70%);
   border-radius: 50%;
   transform: translate(-50%, -50%);
-  animation: harbor-breathe 3600ms ease-in-out infinite;
+  animation: quiet-glow-in 700ms 80ms ease-out both;
 }
 
-.harbor-glow__ring {
+.quiet-handoff__line {
+  position: absolute;
+  right: 16%;
+  left: 16%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(100, 207, 140, 0.45), rgba(251, 119, 31, 0.48), transparent);
+  box-shadow: 0 0 24px rgba(100, 207, 140, 0.2);
+  opacity: 0;
+  animation: quiet-line-in 650ms 160ms ease-out both;
+}
+
+.quiet-handoff__line--one { top: 42%; }
+.quiet-handoff__line--two { top: 58%; animation-delay: 260ms; opacity: 0.5; }
+
+.quiet-handoff__preview-mark {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: min(24vw, 290px);
-  aspect-ratio: 1;
-  border: 1px solid rgba(251, 119, 31, 0.2);
-  border-radius: 50%;
+  display: grid;
+  width: 58px;
+  height: 58px;
+  place-items: center;
+  color: var(--primary-foreground);
+  background: linear-gradient(145deg, #ffb14a, var(--celebration-orange));
+  border: 1px solid rgba(255, 236, 209, 0.72);
+  border-radius: 18px;
+  box-shadow: 0 0 0 8px rgba(251, 119, 31, 0.08), 0 12px 34px rgba(251, 119, 31, 0.25), inset 0 1px rgba(255, 255, 255, 0.42);
   transform: translate(-50%, -50%);
-  animation: harbor-ring 3300ms ease-out infinite;
+  opacity: 0;
+  animation: quiet-mark-in 480ms 300ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
 }
 
-.harbor-glow__ring--two { animation-delay: 750ms; }
-.harbor-glow__ring--three { animation-delay: 1500ms; }
+.celebration--quiet-handoff.celebration--preview .quiet-handoff__preview-mark {
+  position: fixed;
+  top: auto;
+  right: 28px;
+  bottom: 28px;
+  left: auto;
+  transform: none;
+  animation: quiet-preview-mark-in 480ms 300ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+}
 
-.harbor-glow__spark {
-  position: absolute;
-  width: 4px;
-  height: 4px;
-  background: var(--celebration-orange);
-  border-radius: 50%;
-  box-shadow: 0 0 12px var(--celebration-orange);
-  animation: harbor-spark 2300ms ease-in-out infinite;
+.quiet-handoff__preview-mark svg {
+  width: 28px;
+  height: 28px;
+  stroke-width: 2.5;
 }
 
 /* Sail away — a direct ShipYard/boat nod. */
@@ -563,7 +713,7 @@ onBeforeUnmount(() => {
 
 .sail-away__boat {
   position: absolute;
-  top: 54%;
+  top: 61%;
   left: -220px;
   width: 170px;
   height: 100px;
@@ -674,6 +824,10 @@ onBeforeUnmount(() => {
 .signal-path__beacon span { width: 9px; height: 9px; background: var(--celebration-orange); border-radius: 50%; box-shadow: 0 0 18px var(--celebration-orange); }
 
 .celebration--reduced .celebration__scene { display: none; }
+.celebration--reduced.celebration--quiet-handoff .celebration__scene { display: block; }
+.celebration--reduced .quiet-handoff__glow,
+.celebration--reduced .quiet-handoff__line { display: none; }
+.celebration--reduced .quiet-handoff__preview-mark { opacity: 1; animation: none; }
 .celebration--reduced .celebration__content,
 .celebration--reduced .celebration__success-mark,
 .celebration--reduced .celebration__success-mark svg { animation: none; }
@@ -681,12 +835,15 @@ onBeforeUnmount(() => {
 .celebration--reduced .celebration__success-ring { display: none; }
 
 @keyframes celebration-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes celebration-out { from { opacity: 1; } to { opacity: 0; } }
 @keyframes celebration-card-in { from { opacity: 0; transform: translateY(12px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes quiet-receipt-in { from { opacity: 0; transform: translateY(8px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes quiet-glow-in { from { opacity: 0; transform: translate(-50%, -50%) scale(0.9); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+@keyframes quiet-line-in { from { opacity: 0; transform: scaleX(0.72); } to { opacity: 1; transform: scaleX(1); } }
+@keyframes quiet-mark-in { from { opacity: 0; transform: translate(-50%, -50%) scale(0.78); } 70% { opacity: 1; transform: translate(-50%, -50%) scale(1.04); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+@keyframes quiet-preview-mark-in { from { opacity: 0; transform: translateY(8px) scale(0.84); } 70% { opacity: 1; transform: translateY(-2px) scale(1.04); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes success-draw { from { opacity: 0; transform: scale(0.4) rotate(-18deg); } to { opacity: 1; transform: scale(1) rotate(0); } }
 @keyframes success-ring { 0% { opacity: 0.55; transform: scale(0.55); } 75%, 100% { opacity: 0; transform: scale(1.28); } }
-@keyframes harbor-breathe { 0%, 100% { opacity: 0.65; transform: translate(-50%, -50%) scale(0.94); } 50% { opacity: 1; transform: translate(-50%, -50%) scale(1.05); } }
-@keyframes harbor-ring { 0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); } 20% { opacity: 0.65; } 100% { opacity: 0; transform: translate(-50%, -50%) scale(2.9); } }
-@keyframes harbor-spark { 0%, 100% { opacity: 0.2; transform: translateY(4px) scale(0.65); } 50% { opacity: 0.9; transform: translateY(-7px) scale(1); } }
 @keyframes sail-across { from { transform: translateX(0) translateY(12px) rotate(2deg); } 18% { transform: translateX(25vw) translateY(-5px) rotate(-1deg); } 66% { transform: translateX(75vw) translateY(4px) rotate(1deg); } to { transform: translateX(calc(100vw + 250px)) translateY(-10px) rotate(-2deg); } }
 @keyframes wake-across { from { opacity: 0; transform: translateX(0) scaleX(0.3); } 18% { opacity: 0.85; } to { opacity: 0; transform: translateX(calc(100vw + 250px)) scaleX(1.2); } }
 @keyframes beam-sweep { 0%, 100% { opacity: 0.1; transform: rotate(-25deg); } 50% { opacity: 0.85; transform: rotate(21deg); } }
@@ -718,6 +875,12 @@ onBeforeUnmount(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .celebration,
+  .celebration--closing {
+    animation-duration: 160ms !important;
+    animation-timing-function: ease !important;
+  }
+
   .celebration *,
   .celebration::before,
   .celebration::after {

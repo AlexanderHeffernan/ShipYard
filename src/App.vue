@@ -13,7 +13,7 @@ import { useShippingCompletion } from './composables/useShippingCompletion';
 import { useUpdates } from './composables/useUpdates';
 import { getCompletionAnimation } from './services/completionAnimation';
 import { deleteWorkItem, inspectWorkItemDeletion } from './services/projects';
-import type { CompletionAnimation } from './types/celebration';
+import { isFullScreenCompletionAnimation, type CompletionAnimation } from './types/celebration';
 import type { DeleteWorkItemRequest, DeletionPlan, Project, WorkItem } from './types/projects';
 
 const sidebarOpen = ref(true);
@@ -57,6 +57,11 @@ const selection = computed(() => {
   }
   return null;
 });
+const quietCompletionVisible = computed(() => (
+  completionState.value.visible
+  && completionState.value.completion
+  && !isFullScreenCompletionAnimation(completionState.value.completion.animation)
+));
 
 onMounted(() => {
   void loadProjects();
@@ -207,13 +212,22 @@ const deletionConfirmLabel = computed(() => {
       @settings="appSettingsOpen = true"
     />
 
-    <main class="app-content">
-      <WorkItemPanel
-        :project="selection?.project ?? null"
-        :work-item="selection?.workItem ?? null"
-        :sidebar-open="sidebarOpen"
-        @settings="openSettings"
-        @refresh="rescanProject"
+    <main class="app-content" :class="{ 'app-content--quiet-completion': quietCompletionVisible }">
+      <div class="app-content__surface">
+        <WorkItemPanel
+          :project="selection?.project ?? null"
+          :work-item="selection?.workItem ?? null"
+          :sidebar-open="sidebarOpen"
+          @settings="openSettings"
+          @refresh="rescanProject"
+        />
+      </div>
+
+      <ShippingCelebration
+        v-if="completionState.visible && completionState.completion"
+        :key="completionState.completion.runId"
+        :completion="completionState.completion"
+        @close="dismissCompletion"
       />
     </main>
 
@@ -224,12 +238,6 @@ const deletionConfirmLabel = computed(() => {
       @close="settingsProject = null"
     />
     <AppSettingsModal v-if="appSettingsOpen" @close="closeAppSettings" @preview="previewCompletion" />
-    <ShippingCelebration
-      v-if="completionState.visible && completionState.completion"
-      :key="completionState.completion.runId"
-      :completion="completionState.completion"
-      @close="dismissCompletion"
-    />
     <ConfirmationDialog
       v-if="deletion"
       :title="deletionTitle"
@@ -277,6 +285,26 @@ const deletionConfirmLabel = computed(() => {
   min-width: 0;
   overflow: hidden;
   background: var(--surface-content);
+}
+
+.app-content__surface {
+  width: 100%;
+  height: 100%;
+  opacity: 1;
+  filter: blur(0);
+  transition: opacity 340ms ease, filter 340ms ease;
+}
+
+.app-content--quiet-completion .app-content__surface {
+  opacity: 0;
+  filter: blur(2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-content__surface {
+    filter: none;
+    transition-duration: 160ms;
+  }
 }
 
 .deletion-remote-note {

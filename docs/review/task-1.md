@@ -9,7 +9,7 @@ The review captures below were taken from the running ShipYard Tauri app on the 
 To exercise the feature, open **Shipyard Settings → Experimental**, choose an option from
 **Completion animation**, and select **Preview**. The 11 choices are:
 
-1. Harbor glow (default)
+1. Quiet handoff (default; non-full-screen)
 2. Sail away
 3. Lighthouse beam
 4. Confetti burst
@@ -21,5 +21,8 @@ To exercise the feature, open **Shipyard Settings → Experimental**, choose an 
 10. Firework sky
 11. Signal path
 
-Preview never changes project state. The automatic celebration is shown only after a shipping
-run exits successfully; failed, cancelled, blocked, and ordinary script runs stay quiet.
+The preview deliberately removes the center receipt so the selected animation is unobstructed;
+Escape, the corner close button, or the automatic timeout returns to Settings. Preview never
+changes project state. The automatic celebration is shown only after a shipping run exits
+successfully; failed, cancelled, blocked, and ordinary script runs stay quiet. Every celebration
+fades in and out, and the quiet handoff also fades the review surface away before returning it.

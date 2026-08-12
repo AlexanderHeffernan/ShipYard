@@ -54,7 +54,7 @@ onBeforeUnmount(() => {
       <div class="experimental-card__icon"><Sparkles aria-hidden="true" /></div>
       <div class="experimental-card__content">
         <label for="completion-animation">Completion animation</label>
-        <p>Shown once after a merge or push really completes. Failed, stopped, and blocked runs stay quiet.</p>
+        <p>Shown once after a merge or push really completes. The default stays out of the way; the other ten options fill the screen.</p>
         <div class="experimental-card__controls">
           <select id="completion-animation" :value="selectedAnimation" @change="chooseAnimation">
             <option v-for="option in completionAnimationOptions" :key="option.id" :value="option.id">

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   completionAnimationOptions,
   DEFAULT_COMPLETION_ANIMATION,
+  isFullScreenCompletionAnimation,
   readCompletionAnimation,
   saveCompletionAnimation,
 } from './celebration';
@@ -22,7 +23,10 @@ describe('completion animation selection', () => {
   it('ships with one polished default and ten additional variants', () => {
     expect(completionAnimationOptions).toHaveLength(11);
     expect(completionAnimationOptions.filter((option) => option.default)).toHaveLength(1);
-    expect(DEFAULT_COMPLETION_ANIMATION).toBe('harbor-glow');
+    expect(completionAnimationOptions.filter((option) => option.fullScreen)).toHaveLength(10);
+    expect(DEFAULT_COMPLETION_ANIMATION).toBe('quiet-handoff');
+    expect(isFullScreenCompletionAnimation(DEFAULT_COMPLETION_ANIMATION)).toBe(false);
+    expect(isFullScreenCompletionAnimation('sail-away')).toBe(true);
   });
 
   it('persists a valid selection and safely falls back from stale storage', () => {
@@ -35,6 +39,8 @@ describe('completion animation selection', () => {
     expect(readCompletionAnimation(storage)).toBe(DEFAULT_COMPLETION_ANIMATION);
 
     storage.setItem('shipyard.completionAnimation', 'removed-variant');
+    expect(readCompletionAnimation(storage)).toBe(DEFAULT_COMPLETION_ANIMATION);
+    storage.setItem('shipyard.completionAnimation', 'harbor-glow');
     expect(readCompletionAnimation(storage)).toBe(DEFAULT_COMPLETION_ANIMATION);
   });
 
