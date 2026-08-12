@@ -23,15 +23,30 @@
         font: 16px/1.5 system-ui, sans-serif;
         text-align: center;
       }
+
+      #view-mode {
+        position: fixed;
+        z-index: 2;
+        top: max(12px, env(safe-area-inset-top));
+        right: max(12px, env(safe-area-inset-right));
+        padding: 8px 12px;
+        border: 1px solid #666b75;
+        border-radius: 8px;
+        color: #f4f5f7;
+        background: rgb(17 19 24 / 85%);
+        font: 14px system-ui, sans-serif;
+      }
     </style>
   </head>
   <body>
     <div id="status">Connecting to the Shipyard desktop…</div>
+    <button id="view-mode" type="button">Actual size</button>
     <div id="screen"></div>
     <script type="module">
       import RFB from './core/rfb.js';
 
       const status = document.getElementById('status');
+      const viewMode = document.getElementById('view-mode');
       const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
       const rfb = new RFB(
         document.getElementById('screen'),
@@ -50,6 +65,13 @@
       rfb.addEventListener('securityfailure', () => {
         status.hidden = false;
         status.textContent = 'The Shipyard desktop rejected the connection.';
+      });
+      viewMode.addEventListener('click', () => {
+        const fit = !rfb.scaleViewport;
+        rfb.scaleViewport = fit;
+        rfb.clipViewport = !fit;
+        rfb.dragViewport = !fit;
+        viewMode.textContent = fit ? 'Actual size' : 'Fit screen';
       });
     </script>
   </body>

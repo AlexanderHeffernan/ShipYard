@@ -27,6 +27,7 @@ packages=(
   patchelf
   pkg-config
   websockify
+  wmctrl
   x11-utils
   x11vnc
   xdotool

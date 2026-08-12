@@ -36,7 +36,20 @@ pids+=("$!")
 npm run tauri dev -- --no-watch &
 pids+=("$!")
 
-x11vnc -display "$DISPLAY" -localhost -forever -shared -nopw -rfbport "$vnc_port" &
+(
+  for _ in {1..120}; do
+    window="$(xdotool search --onlyvisible --name '^Shipyard$' 2>/dev/null | tail -1 || true)"
+    if [[ -n "$window" ]]; then
+      wmctrl -ir "$window" -b add,maximized_vert,maximized_horz
+      exit 0
+    fi
+    sleep 0.25
+  done
+  echo "Shipyard window did not appear in time." >&2
+) &
+
+x11vnc -display "$DISPLAY" -localhost -forever -shared -nopw -noxdamage \
+  -rfbport "$vnc_port" -rfbportv6 "$vnc_port" &
 pids+=("$!")
 
 web_root="${TMPDIR:-/tmp}/shipyard-novnc"

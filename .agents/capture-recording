@@ -8,6 +8,12 @@ export DISPLAY="${DISPLAY:-:99}"
 duration="${1:-10}"
 output="${2:-.amp/in/artifacts/shipyard-$(date +%Y%m%d-%H%M%S).mp4}"
 mkdir -p "$(dirname "$output")"
-ffmpeg -loglevel warning -y -f x11grab -framerate 30 -video_size 1440x900 \
-  -i "$DISPLAY.0" -t "$duration" -c:v libx264 -preset veryfast -pix_fmt yuv420p "$output"
+window="$(xdotool search --onlyvisible --name '^Shipyard$' 2>/dev/null | tail -1 || true)"
+if [[ -z "$window" ]]; then
+  echo "Shipyard is not running on $DISPLAY (run amp orb services ensure)." >&2
+  exit 1
+fi
+ffmpeg -loglevel warning -y -f x11grab -framerate 30 -window_id "$window" \
+  -i "$DISPLAY" -t "$duration" -vf 'crop=trunc(iw/2)*2:trunc(ih/2)*2' \
+  -c:v libx264 -preset veryfast -pix_fmt yuv420p "$output"
 printf '%s\n' "$output"

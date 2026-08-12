@@ -45,8 +45,9 @@ amp orb services ensure
 ```
 
 The command prints the **Shipyard Native App** portal URL. The portal is interactive and displays
-the Tauri window running on display `:99`. Agents can automate the app with `DISPLAY=:99 xdotool`
-and capture review artifacts with:
+the maximized Tauri window running on display `:99`. On smaller screens, use **Actual size** for a
+zoomed, pannable view and **Fit screen** to see the whole app. Agents can automate the app with
+`DISPLAY=:99 xdotool` and capture app-only review artifacts with:
 
 ```sh
 .agents/capture-screenshot
