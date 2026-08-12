@@ -151,6 +151,15 @@ fn spawn_command(command: CommandBuilder) -> Result<SpawnedTerminal, String> {
 
 fn run_command(script: &Path, working_directory: &str) -> CommandBuilder {
     let mut command = CommandBuilder::new("/bin/zsh");
+    // macOS apps launched from Finder do not inherit the user's terminal PATH.
+    // Load the normal login environment and the user's zsh configuration before
+    // executing the stored script so tools installed through Homebrew, nvm, etc.
+    // are available to it without requiring users to hard-code PATH entries.
+    command.args([
+        "-l",
+        "-c",
+        "[[ -r \"$HOME/.zshrc\" ]] && source \"$HOME/.zshrc\"; source \"$0\"",
+    ]);
     command.arg(script);
     command.cwd(working_directory);
     command.env("SHIPYARD_WORKTREE_PATH", working_directory);
@@ -258,4 +267,59 @@ fn force_termination(
 
 fn lock_error<T>(error: std::sync::PoisonError<T>) -> String {
     error.to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{run_command, spawn_command};
+    use std::{
+        fs,
+        io::Read,
+        path::PathBuf,
+        time::{SystemTime, UNIX_EPOCH},
+    };
+
+    #[test]
+    fn run_shell_loads_the_user_zshrc_before_the_script() {
+        let root = temporary_directory();
+        let home = root.join("home");
+        let script = root.join("run.sh");
+        fs::create_dir_all(&home).unwrap();
+        fs::write(
+            home.join(".zshrc"),
+            "export SHIPYARD_TEST_ZSHRC_PATH=loaded\n",
+        )
+        .unwrap();
+        fs::write(
+            &script,
+            "[[ \"$SHIPYARD_TEST_ZSHRC_PATH\" == loaded ]] || exit 1\necho startup-loaded\n",
+        )
+        .unwrap();
+
+        let mut command = run_command(&script, root.to_str().unwrap());
+        command.env("HOME", &home);
+        let mut terminal = spawn_command(command).unwrap();
+        let mut reader = terminal.reader;
+        let output_thread = std::thread::spawn(move || {
+            let mut output = String::new();
+            reader.read_to_string(&mut output).unwrap();
+            output
+        });
+        let status = terminal.child.wait().unwrap();
+        let output = output_thread.join().unwrap();
+
+        assert!(status.success(), "{output}");
+        assert!(output.contains("startup-loaded"), "{output}");
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    fn temporary_directory() -> PathBuf {
+        let suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!("shipyard-run-shell-test-{suffix}"));
+        fs::create_dir_all(&path).unwrap();
+        path
+    }
 }
