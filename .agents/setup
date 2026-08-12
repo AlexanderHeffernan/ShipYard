@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$repo_root"
+
+step() {
+  printf '\n==> %s\n' "$1"
+}
+
+step "Installing system prerequisites"
+packages=(
+  build-essential
+  ca-certificates
+  curl
+  gh
+  git
+  libayatana-appindicator3-dev
+  libgtk-3-dev
+  librsvg2-dev
+  libwebkit2gtk-4.1-dev
+  patchelf
+  pkg-config
+  zsh
+)
+
+missing_packages=()
+for package in "${packages[@]}"; do
+  if ! dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q 'install ok installed'; then
+    missing_packages+=("$package")
+  fi
+done
+
+if ((${#missing_packages[@]})); then
+  sudo apt-get update
+  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "${missing_packages[@]}"
+else
+  echo "System prerequisites are already installed."
+fi
+
+step "Installing the Rust toolchain"
+if [[ ! -x "$HOME/.cargo/bin/rustup" ]]; then
+  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+    | sh -s -- -y --profile minimal --default-toolchain stable --no-modify-path
+else
+  echo "Rust is already installed."
+fi
+export PATH="$HOME/.cargo/bin:$PATH"
+
+profile_marker="# Shipyard Rust toolchain"
+if ! grep -Fqx "$profile_marker" "$HOME/.bash_profile" 2>/dev/null; then
+  cat >> "$HOME/.bash_profile" <<'EOF'
+
+# Shipyard Rust toolchain
+export PATH="$HOME/.cargo/bin:$PATH"
+EOF
+fi
+
+step "Installing JavaScript dependencies"
+command -v node >/dev/null || { echo "Node.js is required but was not found." >&2; exit 1; }
+command -v npm >/dev/null || { echo "npm is required but was not found." >&2; exit 1; }
+npm ci
+
+step "Fetching Rust dependencies"
+cargo fetch --manifest-path src-tauri/Cargo.toml --locked
+
+step "Setup complete"
+printf 'Node %s, npm %s, %s\n' "$(node --version)" "$(npm --version)" "$(rustc --version)"
