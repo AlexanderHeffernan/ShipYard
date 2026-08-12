@@ -30,6 +30,7 @@ npm run tauri dev
 Validation:
 
 ```sh
+npm test
 npm run build
 cargo test --manifest-path src-tauri/Cargo.toml
 cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings

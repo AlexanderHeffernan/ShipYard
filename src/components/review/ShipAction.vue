@@ -1,15 +1,13 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRunner } from '../../composables/useRunner';
 import type { Project, WorkItem } from '../../types/projects';
 import { pullRequestSyncState } from '../../utils/workItems';
 
 const props = defineProps<{ project: Project; workItem: WorkItem }>();
-const emit = defineEmits<{ refresh: [] }>();
 const { currentRun, error, shipWork, cancel } = useRunner();
 const root = ref<HTMLElement>();
 const menuOpen = ref(false);
-const refreshedRunId = ref<string | null>(null);
 
 const active = computed(() => currentRun.value?.kind === 'ship' && currentRun.value.workItemId === props.workItem.id && ['running', 'stopping'].includes(currentRun.value.status));
 const anotherRunActive = computed(() => !!currentRun.value && ['running', 'stopping'].includes(currentRun.value.status) && !active.value);
@@ -59,12 +57,6 @@ function closeMenu(event: PointerEvent) {
   if (!root.value?.contains(event.target as Node)) menuOpen.value = false;
 }
 
-watch(() => currentRun.value, (state) => {
-  if (state?.kind === 'ship' && state.workItemId === props.workItem.id && !['running', 'stopping'].includes(state.status) && refreshedRunId.value !== state.runId) {
-    refreshedRunId.value = state.runId;
-    emit('refresh');
-  }
-});
 onMounted(() => document.addEventListener('pointerdown', closeMenu));
 onBeforeUnmount(() => document.removeEventListener('pointerdown', closeMenu));
 </script>

@@ -17,7 +17,7 @@ const emit = defineEmits<{ close: [] }>();
 const titleId = useId();
 
 function onKeydown(event: KeyboardEvent) {
-  if (event.key === 'Escape') emit('close');
+  if (event.key === 'Escape' && !document.querySelector('[data-modal-layer="top"]')) emit('close');
 }
 
 onMounted(() => document.addEventListener('keydown', onKeydown));

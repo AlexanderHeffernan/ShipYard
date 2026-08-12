@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import ShippingCelebration from './components/celebration/ShippingCelebration.vue';
 import AppSettingsModal from './components/settings/AppSettingsModal.vue';
 import WorkItemPanel from './components/review/WorkItemPanel.vue';
 import ProjectSettingsModal from './components/settings/ProjectSettingsModal.vue';
@@ -7,8 +8,12 @@ import AppSidebar from './components/sidebar/AppSidebar.vue';
 import ProjectSwitcher from './components/sidebar/ProjectSwitcher.vue';
 import ConfirmationDialog from './components/ui/ConfirmationDialog.vue';
 import { useProjects } from './composables/useProjects';
+import { useRunner } from './composables/useRunner';
+import { useShippingCompletion } from './composables/useShippingCompletion';
 import { useUpdates } from './composables/useUpdates';
+import { getCompletionAnimation } from './services/completionAnimation';
 import { deleteWorkItem, inspectWorkItemDeletion } from './services/projects';
+import type { CompletionAnimation } from './types/celebration';
 import type { DeleteWorkItemRequest, DeletionPlan, Project, WorkItem } from './types/projects';
 
 const sidebarOpen = ref(true);
@@ -17,6 +22,7 @@ const selectedWorkItemId = ref<string | null>(null);
 const settingsProject = ref<Project | null>(null);
 const settingsSection = ref<'open' | 'run'>('run');
 const appSettingsOpen = ref(false);
+const settledShippingRunId = ref<string | null>(null);
 const deletion = ref<{
   project: Project;
   item: WorkItem;
@@ -36,6 +42,13 @@ const {
   removeProject,
   disposeProjects,
 } = useProjects();
+const { currentRun } = useRunner();
+const {
+  state: completionState,
+  observeRun: observeShippingRun,
+  dismiss: dismissCompletion,
+  preview: previewShippingCompletion,
+} = useShippingCompletion();
 const { startAutomaticChecks, stopAutomaticChecks } = useUpdates();
 const selection = computed(() => {
   for (const project of projects.value) {
@@ -56,6 +69,13 @@ onBeforeUnmount(() => {
 watch(selection, (current) => {
   if (selectedWorkItemId.value && !current) selectedWorkItemId.value = null;
 });
+watch(currentRun, (run) => {
+  if (!run || run.kind !== 'ship' || !['succeeded', 'failed', 'cancelled'].includes(run.status)) return;
+  observeShippingRun(run, getCompletionAnimation());
+  if (settledShippingRunId.value === run.runId) return;
+  settledShippingRunId.value = run.runId;
+  void rescanProject(run.projectId);
+}, { deep: true });
 
 function openSettings(project: Project, section: 'open' | 'run' = 'run') {
   settingsProject.value = project;
@@ -65,6 +85,18 @@ function openSettings(project: Project, section: 'open' | 'run' = 'run') {
 function openProjectSettings(projectId: string) {
   const project = projects.value.find((candidate) => candidate.id === projectId);
   if (project) openSettings(project);
+}
+
+function previewCompletion(animation: CompletionAnimation) {
+  previewShippingCompletion(animation);
+}
+
+function closeAppSettings() {
+  if (completionState.value.completion?.preview) {
+    dismissCompletion();
+    return;
+  }
+  appSettingsOpen.value = false;
 }
 
 function message(error: unknown) {
@@ -191,7 +223,13 @@ const deletionConfirmLabel = computed(() => {
       :initial-section="settingsSection"
       @close="settingsProject = null"
     />
-    <AppSettingsModal v-if="appSettingsOpen" @close="appSettingsOpen = false" />
+    <AppSettingsModal v-if="appSettingsOpen" @close="closeAppSettings" @preview="previewCompletion" />
+    <ShippingCelebration
+      v-if="completionState.visible && completionState.completion"
+      :key="completionState.completion.runId"
+      :completion="completionState.completion"
+      @close="dismissCompletion"
+    />
     <ConfirmationDialog
       v-if="deletion"
       :title="deletionTitle"

@@ -1,5 +1,7 @@
+#[cfg(target_os = "macos")]
+use super::launcher::build_command;
 use super::{
-    application_kind::ApplicationKind, delete_application, launcher::build_command, load_settings,
+    application_kind::ApplicationKind, delete_application, load_settings,
     open_application_input::OpenApplicationInput, save_application,
     store::validate_application_path,
 };

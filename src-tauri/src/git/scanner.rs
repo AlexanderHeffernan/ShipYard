@@ -12,9 +12,14 @@ pub fn scan_project(selected_path: &str) -> Result<Project, String> {
     let (root, common_dir) = repository::resolve(selected_path)?;
     let project_id = repository::path_string(&common_dir);
     let worktrees = worktree_reader::read(&root)?;
+    let visible_worktrees: Vec<_> = worktrees
+        .iter()
+        .filter(|worktree| !worktree_reader::is_shipyard_managed(&worktree.path))
+        .cloned()
+        .collect();
     let branches = branch_reader::read(&root)?;
     let base = references::find_base(&root, &branches);
-    let worktree_by_branch = index_worktrees(&worktrees);
+    let worktree_by_branch = index_worktrees(&visible_worktrees);
     let processed = branches
         .iter()
         .map(|branch| branch.reference.clone())
@@ -26,11 +31,11 @@ pub fn scan_project(selected_path: &str) -> Result<Project, String> {
         &worktree_by_branch,
         base.as_ref(),
     )?;
-    items.extend(unborn_items(&project_id, &worktrees, &processed)?);
+    items.extend(unborn_items(&project_id, &visible_worktrees, &processed)?);
     items.extend(detached_items(
         &root,
         &project_id,
-        &worktrees,
+        &visible_worktrees,
         base.as_ref(),
     )?);
     items.sort_by_key(|item| std::cmp::Reverse(item.updated_at));

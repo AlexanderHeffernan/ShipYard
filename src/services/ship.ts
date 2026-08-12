@@ -1,7 +1,8 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { Project, WorkItem } from '../types/projects';
+import type { ShippingAction } from '../types/shipping';
 
-export type ShippingAction = 'createPullRequest' | 'updatePullRequest' | 'mergePullRequest' | 'directToMain';
+export type { ShippingAction } from '../types/shipping';
 
 export function shipWork(project: Project, item: WorkItem, action: ShippingAction) {
   return invoke<{ runId: string }>('ship_work', {

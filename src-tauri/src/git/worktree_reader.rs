@@ -21,9 +21,22 @@ pub(super) fn read(root: &Path) -> Result<Vec<Worktree>, String> {
 pub(crate) fn paths(root: &Path) -> Result<Vec<PathBuf>, String> {
     Ok(read(root)?
         .into_iter()
-        .filter(|worktree| !worktree.bare)
+        .filter(|worktree| !worktree.bare && !is_shipyard_managed(&worktree.path))
         .map(|worktree| worktree.path)
         .collect())
+}
+
+pub(crate) fn is_shipyard_managed(path: &Path) -> bool {
+    let components: Vec<_> = path
+        .components()
+        .filter_map(|component| component.as_os_str().to_str())
+        .collect();
+    components
+        .windows(3)
+        .any(|window| window[0] == "pull-request-checkouts" && window[2].starts_with("pr-"))
+        || components
+            .windows(2)
+            .any(|window| window[0] == "resolutions" && window[1].starts_with("shipping-"))
 }
 
 pub(crate) fn primary_path(root: &Path) -> Result<PathBuf, String> {

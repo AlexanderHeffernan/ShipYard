@@ -46,7 +46,7 @@ const statusClass = computed(() => {
           <OpenAction :project="project" :work-item="workItem" @settings="emit('settings', 'open')" />
           <RunAction :project="project" :work-item="workItem" @settings="emit('settings', $event)" />
         </template>
-        <ShipAction :project="project" :work-item="workItem" @refresh="emit('refresh')" />
+        <ShipAction :project="project" :work-item="workItem" />
       </div>
     </div>
 

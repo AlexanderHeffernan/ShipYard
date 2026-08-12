@@ -1,3 +1,5 @@
+import type { ShippingAction } from './shipping';
+
 export type RunScript = {
   id: string;
   label: string;
@@ -23,6 +25,7 @@ export type RunState = {
   projectId: string;
   workItemId: string | null;
   kind: 'run' | 'ship';
+  shippingAction: ShippingAction | null;
   scriptLabel: string;
   output: string;
   status: 'running' | 'stopping' | 'succeeded' | 'failed' | 'cancelled';

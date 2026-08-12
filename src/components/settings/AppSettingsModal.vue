@@ -1,14 +1,16 @@
 <script setup lang="ts">
-import { Bot, Check, Download, GitPullRequest, RefreshCw } from '@lucide/vue';
+import { Bot, Check, Download, FlaskConical, GitPullRequest, RefreshCw } from '@lucide/vue';
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 import AppButton from '../ui/AppButton.vue';
 import SettingsModal from './SettingsModal.vue';
 import UpdatesSettingsSection from './UpdatesSettingsSection.vue';
+import ExperimentalSettingsSection from './ExperimentalSettingsSection.vue';
 import { getAgentConfiguration, getGitHubStatus, saveAgentSettings } from '../../services/settings';
 import type { AgentConfiguration, AgentSettings, GitHubStatus } from '../../types/settings';
+import type { CompletionAnimation } from '../../types/celebration';
 
-const emit = defineEmits<{ close: [] }>();
-const section = ref<'agents' | 'github' | 'updates'>('agents');
+const emit = defineEmits<{ close: []; preview: [animation: CompletionAnimation] }>();
+const section = ref<'agents' | 'github' | 'updates' | 'experimental'>('agents');
 const agentConfiguration = ref<AgentConfiguration | null>(null);
 const agentDraft = ref<AgentSettings>({ preferredAgent: null });
 const github = ref<GitHubStatus | null>(null);
@@ -85,9 +87,13 @@ onBeforeUnmount(() => {
       <button :aria-current="section === 'updates' ? 'page' : undefined" type="button" @click="section = 'updates'">
         <Download aria-hidden="true" /> Updates
       </button>
+      <button :aria-current="section === 'experimental' ? 'page' : undefined" type="button" @click="section = 'experimental'">
+        <FlaskConical aria-hidden="true" /> Experimental
+      </button>
     </template>
 
     <UpdatesSettingsSection v-if="section === 'updates'" />
+    <ExperimentalSettingsSection v-else-if="section === 'experimental'" @preview="emit('preview', $event)" />
     <main v-else>
       <div class="section-heading">
         <div>

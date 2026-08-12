@@ -71,8 +71,9 @@ export function useProjects() {
           projects.value[index] = updated;
           versions.set(id, version + 1);
         }
-      } catch {
-        // Watch/scan errors are transient; retain the last good project state.
+      } catch (scanError) {
+        error.value = errorMessage(scanError);
+        // Retain the last good project state until the next successful scan.
       }
     } while (queued.has(id));
     refreshing.delete(id);
@@ -135,14 +136,7 @@ export function useProjects() {
   }
 
   async function rescanProject(id: string) {
-    const index = projects.value.findIndex((project) => project.id === id);
-    if (index === -1) return;
-    try {
-      const scanned = withColor(await scanProject(projects.value[index].path));
-      projects.value = projects.value.map((project) => (project.id === id ? scanned : project));
-    } catch (scanError) {
-      error.value = errorMessage(scanError);
-    }
+    await refreshProject(id);
   }
 
   function removeProject(id: string) {
