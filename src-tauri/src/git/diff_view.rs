@@ -11,6 +11,8 @@ pub struct WorkItemDiffRequest {
     pub(super) worktree_path: Option<String>,
     pub(super) head_sha: String,
     pub(super) default_branch: Option<String>,
+    #[serde(default)]
+    pub(super) pull_request_number: Option<u64>,
 }
 
 #[derive(Serialize)]
@@ -31,6 +33,7 @@ pub fn read(request: WorkItemDiffRequest) -> Result<WorkItemDiff, String> {
         .as_deref()
         .map(|path| repository::validate_worktree(&request.project_id, path))
         .transpose()?;
+    ensure_head_available(&project_root, checkout.as_deref(), &request)?;
     validate_target(&project_root, checkout.as_deref(), &request)?;
 
     let (base, comparison_label) = comparison_base(&project_root, &request)?;
@@ -59,6 +62,45 @@ pub fn read(request: WorkItemDiffRequest) -> Result<WorkItemDiff, String> {
         patch,
         comparison_label,
     })
+}
+
+fn ensure_head_available(
+    project_root: &Path,
+    checkout: Option<&Path>,
+    request: &WorkItemDiffRequest,
+) -> Result<(), String> {
+    if checkout.is_some()
+        || request.branch.is_some()
+        || commit_exists(project_root, &request.head_sha)
+    {
+        return Ok(());
+    }
+
+    let Some(number) = request.pull_request_number else {
+        return Err(
+            "The pull request commit is not available locally. Refresh the project and try again."
+                .to_owned(),
+        );
+    };
+    let reference = format!("refs/shipyard/pull-requests/{number}/head");
+    let refspec = format!("+refs/pull/{number}/head:{reference}");
+    command::output(project_root, &["fetch", "--no-tags", "origin", &refspec])
+        .map_err(|error| format!("Could not fetch pull request #{number} for review: {error}"))?;
+
+    let fetched_sha = command::text(
+        project_root,
+        &["rev-parse", "--verify", &format!("{reference}^{{commit}}")],
+    )?;
+    if fetched_sha.trim() != request.head_sha {
+        return Err(
+            "The pull request changed on GitHub. Refresh the project and try again.".to_owned(),
+        );
+    }
+    Ok(())
+}
+
+fn commit_exists(root: &Path, sha: &str) -> bool {
+    command::optional_text(root, &["cat-file", "-e", &format!("{sha}^{{commit}}")]).is_some()
 }
 
 fn validate_target(

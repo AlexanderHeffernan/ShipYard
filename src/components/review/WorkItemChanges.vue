@@ -243,6 +243,7 @@ async function loadDiff() {
       worktreePath: props.workItem.worktreePath,
       headSha: props.workItem.headSha,
       defaultBranch: props.project.defaultBranch,
+      pullRequestNumber: props.workItem.pullRequest?.number ?? null,
     });
     if (version !== requestVersion) return;
     const parsed = parsePatchFiles(result.patch, props.workItem.headSha, true);
