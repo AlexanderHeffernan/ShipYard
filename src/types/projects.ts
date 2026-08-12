@@ -44,6 +44,9 @@ export type ScannedProject = {
   name: string;
   path: string;
   defaultBranch: string | null;
+  remoteName: string | null;
+  remoteHost: string | null;
+  remoteIdentity: string | null;
   workItems: WorkItem[];
   githubRepository: string | null;
   githubError: string | null;

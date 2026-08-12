@@ -1,8 +1,13 @@
-use super::{base_branch::BaseBranch, branch::Branch, command, work_status::WorkStatus};
+use super::{
+    base_branch::BaseBranch, branch::Branch, command, remote, work_status::WorkStatus,
+};
 use std::path::Path;
 
 pub(super) fn find_base(root: &Path, branches: &[Branch]) -> Option<BaseBranch> {
-    if let Some(base) = remote_base(root, branches) {
+    let remote = remote::configured(root)
+        .map(|remote| remote.name)
+        .unwrap_or_else(|| "origin".to_owned());
+    if let Some(base) = remote_base(root, branches, &remote) {
         return Some(base);
     }
     for name in ["main", "master", "trunk", "develop"] {
@@ -10,35 +15,29 @@ pub(super) fn find_base(root: &Path, branches: &[Branch]) -> Option<BaseBranch> 
             return Some(BaseBranch {
                 reference: format!("refs/heads/{name}"),
                 name: name.to_owned(),
+                remote: remote.clone(),
             });
         }
     }
-    current_base(root, branches)
+    current_base(root, branches, &remote)
 }
 
-fn remote_base(root: &Path, branches: &[Branch]) -> Option<BaseBranch> {
-    let remote_head = command::optional_text(
-        root,
-        &[
-            "symbolic-ref",
-            "--quiet",
-            "--short",
-            "refs/remotes/origin/HEAD",
-        ],
-    )?;
-    let name = remote_head.trim().strip_prefix("origin/")?;
-    has_branch(branches, name).then(|| BaseBranch {
+fn remote_base(root: &Path, branches: &[Branch], remote: &str) -> Option<BaseBranch> {
+    let name = remote::default_branch(root, remote)?;
+    has_branch(branches, &name).then(|| BaseBranch {
         reference: format!("refs/heads/{name}"),
         name: name.to_owned(),
+        remote: remote.to_owned(),
     })
 }
 
-fn current_base(root: &Path, branches: &[Branch]) -> Option<BaseBranch> {
+fn current_base(root: &Path, branches: &[Branch], remote: &str) -> Option<BaseBranch> {
     let current = command::optional_text(root, &["symbolic-ref", "--quiet", "--short", "HEAD"])?;
     let name = current.trim().to_owned();
     has_branch(branches, &name).then(|| BaseBranch {
         reference: format!("refs/heads/{name}"),
         name,
+        remote: remote.to_owned(),
     })
 }
 
@@ -64,7 +63,8 @@ pub(super) fn comparison(
 }
 
 pub(super) fn remote_tracking_base(root: &Path, base: Option<&BaseBranch>) -> Option<String> {
-    let reference = format!("refs/remotes/origin/{}", base?.name);
+    let base = base?;
+    let reference = format!("refs/remotes/{}/{}", base.remote, base.name);
     command::optional_text(root, &["rev-parse", "--verify", &reference]).map(|_| reference)
 }
 

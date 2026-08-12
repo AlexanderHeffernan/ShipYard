@@ -33,6 +33,30 @@ fn classifies_work_on_the_default_branch() {
 }
 
 #[test]
+fn detects_a_non_github_remote_and_its_non_main_default_branch() {
+    let root = committed_repository("azure-default");
+    let remote = root.with_extension("azure.git");
+    run(&root, &["branch", "-m", "main", "trunk"]);
+    run(&root, &["init", "--bare", remote.to_str().unwrap()]);
+    run(
+        &root,
+        &["remote", "add", "azure", remote.to_str().unwrap()],
+    );
+    run(&root, &["push", "-u", "azure", "trunk"]);
+    run(&remote, &["symbolic-ref", "HEAD", "refs/heads/trunk"]);
+    run(&root, &["remote", "set-head", "azure", "--auto"]);
+
+    let project = scan_project(root.to_str().unwrap()).unwrap();
+
+    assert_eq!(project.default_branch.as_deref(), Some("trunk"));
+    assert_eq!(project.remote_name.as_deref(), Some("azure"));
+    assert_eq!(project.remote_host, None);
+
+    fs::remove_dir_all(root).unwrap();
+    fs::remove_dir_all(remote).unwrap();
+}
+
+#[test]
 fn classifies_ready_and_shipped_branches() {
     let root = committed_repository("branch-status");
     run(&root, &["switch", "-c", "feature/test"]);

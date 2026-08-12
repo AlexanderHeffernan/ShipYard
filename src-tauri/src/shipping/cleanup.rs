@@ -4,6 +4,7 @@ use std::{fs, path::PathBuf};
 pub(crate) struct ShippingCleanup {
     pub(super) project_id: String,
     pub(super) source: PathBuf,
+    pub(super) remote: String,
     pub(super) branch: String,
     pub(super) base: String,
     pub(super) receipt: PathBuf,
@@ -23,11 +24,12 @@ pub(super) fn after_success(cleanup: &ShippingCleanup) -> Result<String, String>
     let source = git::validate_worktree(&cleanup.project_id, &source_text)?;
     verify_checkout(cleanup, &source, shipped_sha)?;
 
-    git::command::output(&source, &["fetch", "origin", &cleanup.base])?;
-    let remote_base = format!("refs/remotes/origin/{}", cleanup.base);
+    git::command::output(&source, &["fetch", &cleanup.remote, &cleanup.base])?;
+    let remote_base = format!("refs/remotes/{}/{}", cleanup.remote, cleanup.base);
     if !is_ancestor(&source, shipped_sha, &remote_base)? {
         return Err(format!(
-            "origin/{} does not contain the shipped commit; the checkout was preserved",
+            "{}/{} does not contain the shipped commit; the checkout was preserved",
+            cleanup.remote,
             cleanup.base
         ));
     }
@@ -236,6 +238,7 @@ mod tests {
                 project_id: self.project_id.clone(),
                 source: self.linked.clone(),
                 branch: "feature/test".to_owned(),
+                remote: "origin".to_owned(),
                 base: "main".to_owned(),
                 receipt: self.receipt.clone(),
             }

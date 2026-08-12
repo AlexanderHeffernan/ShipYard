@@ -181,8 +181,8 @@ fn pull_request_id(project_id: &str, number: u64) -> String {
 }
 
 pub(crate) fn repository_name(root: &Path) -> Option<String> {
-    let remote = git_text(root, &["remote", "get-url", "origin"])?;
-    parse_repository(remote.trim())
+    let remote = git::configured_remote(root)?;
+    parse_repository(remote.url.trim())
 }
 
 fn synchronization(root: &Path, local_sha: &str, remote_sha: &str) -> (u32, u32) {
@@ -277,19 +277,6 @@ fn command(path: &str, root: Option<&Path>, args: &[&str]) -> Result<String, Str
     } else {
         Err(String::from_utf8_lossy(&output.stderr).trim().to_owned())
     }
-}
-
-fn git_text(root: &Path, args: &[&str]) -> Option<String> {
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(root)
-        .args(args)
-        .output()
-        .ok()?;
-    output
-        .status
-        .success()
-        .then(|| String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
 #[cfg(test)]
