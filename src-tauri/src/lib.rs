@@ -94,6 +94,34 @@ async fn get_github_status() -> Result<github::GitHubStatus, String> {
 }
 
 #[tauri::command]
+async fn get_pull_request_checks(
+    request: github::PullRequestRequest,
+) -> Result<github::PullRequestChecks, String> {
+    tauri::async_runtime::spawn_blocking(move || github::checks(request))
+        .await
+        .map_err(|error| format!("GitHub checks request failed: {error}"))?
+}
+
+#[tauri::command]
+async fn get_pull_request_conversation(
+    request: github::PullRequestRequest,
+) -> Result<github::PullRequestConversation, String> {
+    tauri::async_runtime::spawn_blocking(move || github::conversation(request))
+        .await
+        .map_err(|error| format!("GitHub conversation request failed: {error}"))?
+}
+
+#[tauri::command]
+async fn post_pull_request_comment(
+    request: github::PullRequestCommentRequest,
+) -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(move || github::post_comment(request))
+        .await
+        .map(|result| result.map(|entry| serde_json::to_value(entry).unwrap_or_default()))
+        .map_err(|error| format!("GitHub comment request failed: {error}"))?
+}
+
+#[tauri::command]
 fn get_open_settings(app: tauri::AppHandle) -> Result<open::OpenSettings, String> {
     open::load_settings(
         &app.path()
@@ -254,6 +282,9 @@ pub fn run() {
             inspect_work_item_deletion,
             delete_work_item,
             get_github_status,
+            get_pull_request_checks,
+            get_pull_request_conversation,
+            post_pull_request_comment,
             get_open_settings,
             save_open_application,
             delete_open_application,

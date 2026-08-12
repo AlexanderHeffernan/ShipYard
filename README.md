@@ -20,6 +20,20 @@ Shipyard currently detects and supports:
 
 Choose one preferred coding agent in the global Shipyard Settings modal. Agent use is automatic after selection.
 
+### Pull request review surface
+
+For a PR-backed work item, the **Checks** tab reads GitHub's check rollup and the **Conversation**
+tab combines issue comments, submitted reviews, inline review comments, and supported timeline
+events in chronological order. Shipyard can post a new top-level issue comment after validating
+the text; approvals, change requests, replies, and inline review actions remain on GitHub.
+
+Shipyard uses the authenticated GitHub CLI session rather than storing a token. For classic tokens,
+private repositories need the `repo` scope; public repositories need `public_repo` to post comments.
+For fine-grained tokens, grant repository metadata read access, **Pull requests: read**,
+**Actions: read** for checks, and **Issues: read/write** for conversation loading and comments.
+Shipyard shows the detected CLI scopes in **Shipyard Settings → GitHub** and turns missing access,
+expired authentication, and GitHub API rate limits into retryable in-app errors.
+
 ## Development
 
 ```sh
