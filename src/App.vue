@@ -187,6 +187,7 @@ const deletionConfirmLabel = computed(() => {
         :project="selection?.project ?? null"
         :work-item="selection?.workItem ?? null"
         :sidebar-open="sidebarOpen"
+        :fullscreen="isFullscreen"
         @settings="openSettings"
         @refresh="rescanProject"
       />

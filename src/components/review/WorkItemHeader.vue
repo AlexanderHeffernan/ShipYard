@@ -6,11 +6,13 @@ import OpenAction from './OpenAction.vue';
 import RunAction from './RunAction.vue';
 import ShipAction from './ShipAction.vue';
 import CheckoutAction from './CheckoutAction.vue';
+import { workHeaderLeadingInset } from '../../utils/titlebar';
 
 const props = defineProps<{
   project: Project;
   workItem: WorkItem;
   sidebarOpen: boolean;
+  fullscreen: boolean;
 }>();
 
 const emit = defineEmits<{ settings: [section: 'open' | 'run']; refresh: [] }>();
@@ -20,6 +22,7 @@ const kind = computed(() => workItemKind(props.project, props.workItem));
 const meta = computed(() => workItemMeta(props.workItem));
 const syncState = computed(() => pullRequestSyncState(props.workItem));
 const syncLabel = computed(() => pullRequestSyncLabel(props.workItem));
+const headerInset = computed(() => `${workHeaderLeadingInset(props.fullscreen, props.sidebarOpen)}px`);
 const statusLabel = computed(() => {
   if (syncLabel.value) return syncLabel.value;
   const state = props.workItem.pullRequest?.mergeState;
@@ -33,7 +36,10 @@ const statusClass = computed(() => {
 </script>
 
 <template>
-  <header class="work-header" :class="{ 'work-header--sidebar-closed': !sidebarOpen }">
+  <header
+    class="work-header"
+    :style="{ '--header-inset': headerInset }"
+  >
     <div class="work-header__primary">
       <div class="work-header__identity">
         <span class="work-header__dot" :style="{ background: project.color }"></span>
@@ -65,15 +71,9 @@ const statusClass = computed(() => {
 
 <style scoped>
 .work-header {
-  --header-inset: 16px;
-
   flex: 0 0 auto;
   height: 70px;
   border-bottom: 1px solid var(--border-subtle);
-}
-
-.work-header--sidebar-closed {
-  --header-inset: 116px;
 }
 
 .work-header__primary {
