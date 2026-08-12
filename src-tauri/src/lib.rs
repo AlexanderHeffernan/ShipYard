@@ -68,6 +68,15 @@ async fn get_work_item_diff(
 }
 
 #[tauri::command]
+async fn get_work_item_commits(
+    request: git::WorkItemCommitsRequest,
+) -> Result<git::WorkItemCommitHistory, String> {
+    tauri::async_runtime::spawn_blocking(move || git::read_work_item_commits(request))
+        .await
+        .map_err(|error| format!("work item commit history failed: {error}"))?
+}
+
+#[tauri::command]
 async fn inspect_work_item_deletion(
     request: git::DeleteWorkItemRequest,
 ) -> Result<git::DeletionPlan, String> {
@@ -251,6 +260,7 @@ pub fn run() {
             scan_project,
             checkout_pull_request,
             get_work_item_diff,
+            get_work_item_commits,
             inspect_work_item_deletion,
             delete_work_item,
             get_github_status,
