@@ -125,6 +125,7 @@ pub(crate) fn enrich_project(root: &Path, project: &mut Project) {
                         || (item.branch.is_none() && item.head_sha == pull_request.head_ref_oid)
                 });
                 if let Some(item) = local_item {
+                    item.id = pull_request_id(&project.id, pull_request.number);
                     let (local_commits, remote_commits) =
                         synchronization(root, &item.head_sha, &pull_request.head_ref_oid);
                     item.pull_request = Some(hydrate_pull_request(
@@ -156,7 +157,7 @@ fn relevant(pull_request: &GhPullRequest, login: &str) -> bool {
 
 fn remote_pull_request_item(project_id: &str, pull_request: &GhPullRequest) -> git::WorkItem {
     git::WorkItem {
-        id: format!("{project_id}::pull-request::{}", pull_request.number),
+        id: pull_request_id(project_id, pull_request.number),
         project_id: project_id.to_owned(),
         branch: None,
         worktree_path: None,
@@ -172,6 +173,10 @@ fn remote_pull_request_item(project_id: &str, pull_request: &GhPullRequest) -> g
         behind: 0,
         updated_at: 0,
     }
+}
+
+fn pull_request_id(project_id: &str, number: u64) -> String {
+    format!("{project_id}::pull-request::{number}")
 }
 
 pub(crate) fn repository_name(root: &Path) -> Option<String> {

@@ -47,6 +47,7 @@ pub fn pull_request(
         .into_iter()
         .find(|worktree| !worktree.bare && worktree.sha == fetched_sha)
     {
+        link_node_modules(&root, &existing.path)?;
         return Ok(CheckoutPullRequestResult {
             worktree_path: repository::path_string(&existing.path),
         });
@@ -65,7 +66,22 @@ pub fn pull_request(
     fs::create_dir_all(parent).map_err(|error| error.to_string())?;
     let path_text = repository::path_string(&path);
     command::output(&root, &["worktree", "add", "--detach", "--", &path_text, fetched_sha])?;
+    link_node_modules(&root, &path)?;
     Ok(CheckoutPullRequestResult { worktree_path: path_text })
+}
+
+fn link_node_modules(project: &Path, checkout: &Path) -> Result<(), String> {
+    let source = project.join("node_modules");
+    let destination = checkout.join("node_modules");
+    if !source.is_dir() || destination.exists() {
+        return Ok(());
+    }
+    fs::create_dir_all(checkout)
+        .map_err(|error| format!("could not prepare PR checkout dependencies: {error}"))?;
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(&source, &destination)
+        .map_err(|error| format!("could not link project dependencies into PR checkout: {error}"))?;
+    Ok(())
 }
 
 fn checkout_path(app_data: &Path, project_id: &str, number: u64) -> PathBuf {
@@ -122,6 +138,18 @@ mod tests {
         assert_eq!(first.worktree_path, second.worktree_path);
 
         run(&checkout, &["worktree", "remove", "--force", &first.worktree_path]);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn links_existing_node_modules_into_a_new_checkout() {
+        let root = temporary("node-modules");
+        let project = root.join("project");
+        let checkout = root.join("checkout");
+        fs::create_dir_all(project.join("node_modules/vite")).unwrap();
+        super::link_node_modules(&project, &checkout).unwrap();
+        assert_eq!(fs::read_link(checkout.join("node_modules")).unwrap(), project.join("node_modules"));
         fs::remove_dir_all(root).unwrap();
     }
 
