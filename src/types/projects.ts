@@ -13,6 +13,13 @@ export type PullRequest = {
   remoteCommits: number;
 };
 
+export type CheckoutPullRequestRequest = {
+  projectId: string;
+  projectPath: string;
+  pullRequestNumber: number;
+  headSha: string;
+};
+
 export type WorkItem = {
   id: string;
   projectId: string;

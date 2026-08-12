@@ -49,11 +49,12 @@ fn prepare_with_adapter(
     adapter: &dyn agents::AgentAdapter,
 ) -> Result<PreparedShipping, String> {
     let source = git::validate_worktree(&request.project_id, &request.source_path)?;
-    let branch = request
-        .source_branch
-        .as_deref()
-        .ok_or_else(|| "Create a branch before shipping this work".to_owned())?;
-    if branch == request.default_branch {
+    let primary_checkout = git::primary_worktree_path(&source)?;
+    let branch = request.source_branch.as_deref();
+    if !matches!(request.action, ShippingAction::MergePullRequest) && branch.is_none() {
+        return Err("Create a branch before shipping this work".to_owned());
+    }
+    if branch == Some(request.default_branch.as_str()) {
         return Err("Work on the default branch cannot be shipped as a pull request".to_owned());
     }
     if request.github_repository.split('/').count() != 2 {
@@ -78,6 +79,11 @@ fn prepare_with_adapter(
     let script_path = operation_dir.join("ship.sh");
     let resolution_path = base.join("resolutions").join(&operation_id);
     let shipped_commit_path = operation_dir.join("shipped-commit.txt");
+    let managed_checkout = matches!(request.action, ShippingAction::MergePullRequest)
+        .then(|| request.pull_request_number.map(|number| {
+            git::managed_pull_request_checkout_path(base, &request.project_id, number)
+        }))
+        .flatten();
     let script = script(
         &request,
         adapter,
@@ -86,6 +92,8 @@ fn prepare_with_adapter(
         &conflict_prompt,
         &resolution_path,
         &shipped_commit_path,
+        &primary_checkout,
+        managed_checkout.as_deref(),
     )?;
     fs::write(&script_path, script).map_err(|error| error.to_string())?;
     #[cfg(unix)]
@@ -100,7 +108,7 @@ fn prepare_with_adapter(
         cleanup: matches!(request.action, ShippingAction::DirectToMain).then(|| ShippingCleanup {
             project_id: request.project_id,
             source,
-            branch: branch.to_owned(),
+            branch: branch.unwrap_or_default().to_owned(),
             base: request.default_branch,
             receipt: shipped_commit_path,
         }),
@@ -139,6 +147,8 @@ fn script(
     conflict_prompt: &Path,
     resolution_path: &Path,
     shipped_commit_path: &Path,
+    primary_checkout: &Path,
+    managed_checkout: Option<&Path>,
 ) -> Result<String, String> {
     let branch = request.source_branch.as_deref().unwrap_or_default();
     let metadata_command = agent_command(
@@ -164,6 +174,8 @@ branch={branch}
 base={base}
 repository={repository}
 resolution={resolution}
+primary_checkout={primary_checkout}
+managed_checkout={managed_checkout}
 
 echo "Shipyard · checking local work"
 {checkout_guard}
@@ -204,6 +216,8 @@ integrate_target() {{
         base = shell_text(&request.default_branch),
         repository = shell_text(&request.github_repository),
         resolution = shell(resolution_path),
+        primary_checkout = shell(primary_checkout),
+        managed_checkout = managed_checkout.map(shell).unwrap_or_else(|| "''".to_owned()),
         agent_label = adapter.label(),
         conflict_command = conflict_command,
         checkout_guard = if matches!(request.action, ShippingAction::MergePullRequest) {
@@ -298,6 +312,24 @@ fi"#
                 .ok_or_else(|| "Pull request number is required".to_owned())?;
             format!(
                 r#"
+{local_guard}
+if [[ -n "${{source_sha:-}}" ]] && ! git -C "$source" merge-tree --write-tree "$source_sha" "origin/$base" >/dev/null; then
+  integrate_target "$source_sha" "origin/$base" "branch conflicts with origin/$base"
+  git -C "$source" push origin "$RESOLVED_SHA:refs/heads/$branch"
+fi
+echo "Shipyard · merging pull request #{number}"
+gh pr merge {number} --repo "$repository" --squash --delete-branch
+git -C "$source" fetch --prune origin
+if [[ -n "$managed_checkout" ]] && [[ -d "$managed_checkout" ]]; then
+  cd "$primary_checkout"
+  git worktree remove --force -- "$managed_checkout"
+  echo "Shipyard · removed the merged pull request checkout"
+fi
+echo "Shipyard · pull request merged"
+"#,
+                number = number,
+                local_guard = request.source_branch.as_deref().map(|branch| format!(
+                    r#"branch={branch}
 git -C "$source" fetch origin "$base" "$branch"
 if [[ "$(git -C "$source" branch --show-current)" == "$branch" ]] &&
    [[ -n "$(git -C "$source" status --porcelain --untracked-files=normal)" ]]; then
@@ -310,16 +342,9 @@ if [[ "$local_sha" != "$source_sha" ]]; then
   echo "Shipyard · local commits are not synchronized with the pull request; update it before merging" >&2
   exit 1
 fi
-if ! git -C "$source" merge-tree --write-tree "$source_sha" "origin/$base" >/dev/null; then
-  integrate_target "$source_sha" "origin/$base" "branch conflicts with origin/$base"
-  git -C "$source" push origin "$RESOLVED_SHA:refs/heads/$branch"
-fi
-echo "Shipyard · merging pull request #{number}"
-gh pr merge {number} --repo "$repository" --squash --delete-branch
-git -C "$source" fetch --prune origin
-echo "Shipyard · pull request merged"
 "#,
-                number = number,
+                    branch = shell_text(branch),
+                )).unwrap_or_else(|| "git -C \"$source\" fetch origin \"$base\"\n".to_owned()),
             )
         }
     };
@@ -560,12 +585,15 @@ mod tests {
         )
         .unwrap();
         let blocked_output = Command::new("/bin/zsh")
-            .arg(blocked_merge.script_path)
+            .arg(&blocked_merge.script_path)
             .output()
             .unwrap();
         assert!(!blocked_output.status.success());
         assert!(String::from_utf8_lossy(&blocked_output.stderr)
             .contains("local changes are not in the pull request"));
+        assert!(fs::read_to_string(&blocked_merge.script_path)
+            .unwrap()
+            .contains("removed the merged pull request checkout"));
 
         let prepared = prepare_with_adapter(
             &data,

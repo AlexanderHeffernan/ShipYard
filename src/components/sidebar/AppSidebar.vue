@@ -50,7 +50,9 @@ const sections = computed<WorkSection[]>(() => {
       color: project.color,
       projectName: project.name,
       syncState: pullRequestSyncState(item),
-      deletable: item.branch ? item.branch !== project.defaultBranch : item.worktreePath !== project.path,
+      deletable: item.branch
+        ? item.branch !== project.defaultBranch
+        : !!item.worktreePath && item.worktreePath !== project.path,
     })),
   );
 

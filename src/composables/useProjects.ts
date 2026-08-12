@@ -49,6 +49,10 @@ export function useProjects() {
   const versions = new Map<string, number>();
   let stopListening: (() => void) | null = null;
 
+  function refreshAllProjects() {
+    for (const project of projects.value) void refreshProject(project.id);
+  }
+
   async function refreshProject(id: string) {
     if (refreshing.has(id)) {
       queued.add(id);
@@ -84,6 +88,7 @@ export function useProjects() {
 
   async function loadProjects() {
     stopListening ??= await onProjectChanged((id) => void refreshProject(id));
+    window.addEventListener('focus', refreshAllProjects);
     const paths = readSavedPaths();
     if (paths.length === 0) return;
 
@@ -151,6 +156,7 @@ export function useProjects() {
   function disposeProjects() {
     stopListening?.();
     stopListening = null;
+    window.removeEventListener('focus', refreshAllProjects);
     for (const project of projects.value) void stopProjectWatch(project.id);
   }
 
