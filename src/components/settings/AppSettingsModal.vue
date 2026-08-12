@@ -1,13 +1,14 @@
 <script setup lang="ts">
-import { Bot, Check, GitPullRequest, RefreshCw } from '@lucide/vue';
+import { Bot, Check, Download, GitPullRequest, RefreshCw } from '@lucide/vue';
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 import AppButton from '../ui/AppButton.vue';
 import SettingsModal from './SettingsModal.vue';
+import UpdatesSettingsSection from './UpdatesSettingsSection.vue';
 import { getAgentConfiguration, getGitHubStatus, saveAgentSettings } from '../../services/settings';
 import type { AgentConfiguration, AgentSettings, GitHubStatus } from '../../types/settings';
 
 const emit = defineEmits<{ close: [] }>();
-const section = ref<'agents' | 'github'>('agents');
+const section = ref<'agents' | 'github' | 'updates'>('agents');
 const agentConfiguration = ref<AgentConfiguration | null>(null);
 const agentDraft = ref<AgentSettings>({ preferredAgent: null });
 const github = ref<GitHubStatus | null>(null);
@@ -81,9 +82,13 @@ onBeforeUnmount(() => {
       <button :aria-current="section === 'github' ? 'page' : undefined" type="button" @click="section = 'github'">
         <GitPullRequest aria-hidden="true" /> GitHub
       </button>
+      <button :aria-current="section === 'updates' ? 'page' : undefined" type="button" @click="section = 'updates'">
+        <Download aria-hidden="true" /> Updates
+      </button>
     </template>
 
-    <main>
+    <UpdatesSettingsSection v-if="section === 'updates'" />
+    <main v-else>
       <div class="section-heading">
         <div>
           <h3>{{ section === 'agents' ? 'Coding agent' : 'GitHub' }}</h3>
