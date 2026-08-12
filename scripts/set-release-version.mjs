@@ -30,7 +30,7 @@ function updateJson(path, update) {
 
 function replaceVersion(path, pattern) {
   const contents = fs.readFileSync(path, 'utf8');
+  if (!pattern.test(contents)) throw new Error(`Could not find a version in ${path}`);
   const updated = contents.replace(pattern, `$1${version}$2`);
-  if (updated === contents) throw new Error(`Could not update the version in ${path}`);
-  fs.writeFileSync(path, updated);
+  if (updated !== contents) fs.writeFileSync(path, updated);
 }
