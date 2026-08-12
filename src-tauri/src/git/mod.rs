@@ -22,6 +22,7 @@ pub use project::Project;
 pub(crate) use references::ahead_behind;
 pub(crate) use repository::validate_worktree;
 pub(crate) use repository::{belongs_to_project, resolve};
+pub(crate) use checkout::managed_pull_request_checkout_path;
 pub use scanner::scan_project;
 pub(crate) use work_item::{PullRequest, WorkItem};
 pub(crate) use work_status::WorkStatus;

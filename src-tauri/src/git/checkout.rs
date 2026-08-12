@@ -53,7 +53,7 @@ pub fn pull_request(
         });
     }
 
-    let path = checkout_path(app_data, &request.project_id, request.pull_request_number);
+    let path = managed_pull_request_checkout_path(app_data, &request.project_id, request.pull_request_number);
     if path.exists() {
         let path_text = repository::path_string(&path);
         let _ = command::output(&root, &["worktree", "remove", "--force", "--", &path_text]);
@@ -84,7 +84,11 @@ fn link_node_modules(project: &Path, checkout: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn checkout_path(app_data: &Path, project_id: &str, number: u64) -> PathBuf {
+pub(crate) fn managed_pull_request_checkout_path(
+    app_data: &Path,
+    project_id: &str,
+    number: u64,
+) -> PathBuf {
     let digest = Sha256::digest(project_id.as_bytes());
     let project = digest.iter().take(8).map(|byte| format!("{byte:02x}")).collect::<String>();
     app_data.join("pull-request-checkouts").join(project).join(format!("pr-{number}"))
