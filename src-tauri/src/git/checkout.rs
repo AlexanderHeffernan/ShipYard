@@ -1,4 +1,4 @@
-use super::{command, repository, worktree_reader};
+use super::{command, remote, repository, worktree_reader};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{fs, path::{Path, PathBuf}};
@@ -28,12 +28,15 @@ pub fn pull_request(
         return Err("project identity no longer matches; rescan before checking out the pull request".to_owned());
     }
 
+    let remote_name = remote::configured(&root)
+        .map(|remote| remote.name)
+        .unwrap_or_else(|| "origin".to_owned());
     command::output(
         &root,
         &[
             "fetch",
             "--no-tags",
-            "origin",
+            &remote_name,
             &format!("pull/{}/head", request.pull_request_number),
         ],
     )?;
@@ -111,16 +114,17 @@ mod tests {
         run(&checkout, &["switch", "-c", "main"]);
         run(&checkout, &["config", "user.name", "Shipyard Test"]);
         run(&checkout, &["config", "user.email", "shipyard@example.test"]);
+        run(&checkout, &["remote", "rename", "origin", "github"]);
         fs::write(checkout.join("README.md"), "main\n").unwrap();
         run(&checkout, &["add", "."]);
         run(&checkout, &["commit", "-m", "Main"]);
-        run(&checkout, &["push", "-u", "origin", "main"]);
+        run(&checkout, &["push", "-u", "github", "main"]);
         run(&checkout, &["switch", "-c", "feature/pr"]);
         fs::write(checkout.join("feature.txt"), "review me\n").unwrap();
         run(&checkout, &["add", "."]);
         run(&checkout, &["commit", "-m", "Feature"]);
         let head = text(&checkout, &["rev-parse", "HEAD"]);
-        run(&checkout, &["push", "origin", "feature/pr"]);
+        run(&checkout, &["push", "github", "feature/pr"]);
         run(&remote, &["update-ref", "refs/pull/7/head", &head]);
         run(&checkout, &["switch", "main"]);
         let project_id = git::resolve(checkout.to_str().unwrap())

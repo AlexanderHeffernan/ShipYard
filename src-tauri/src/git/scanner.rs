@@ -36,11 +36,17 @@ pub fn scan_project(selected_path: &str) -> Result<Project, String> {
     items.sort_by_key(|item| std::cmp::Reverse(item.updated_at));
 
     let project_root = project_root(&root, &worktrees);
+    let configured_remote = super::remote::configured(&root);
     Ok(Project {
         id: project_id,
         name: project_name(project_root),
         path: repository::path_string(project_root),
         default_branch: base.map(|base| base.name),
+        remote_name: configured_remote.as_ref().map(|remote| remote.name.clone()),
+        remote_host: configured_remote
+            .as_ref()
+            .and_then(|remote| remote.host.clone()),
+        remote_identity: configured_remote.map(|remote| remote.identity),
         work_items: items,
         github_repository: None,
         github_error: None,

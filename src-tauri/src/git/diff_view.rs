@@ -146,8 +146,12 @@ fn pull_request_references(
         .ok_or_else(|| format!("Pull request #{number} does not specify a base branch"))?;
     let base_reference = remote::pull_request_base_reference(number);
     let base_cached = remote::cached_commit(project_root, &base_reference);
+    let remote_name = remote::configured(project_root)
+        .map(|remote| remote.name)
+        .unwrap_or_else(|| "origin".to_owned());
     let base_source = match remote::fetch_branch(
         project_root,
+        &remote_name,
         base_branch,
         &base_reference,
         &format!("the base branch {base_branch} for pull request #{number}"),
@@ -199,9 +203,13 @@ fn local_branch_references(
     let remote_reference = remote::base_reference(default_branch);
     let cached = remote::cached_commit(project_root, &remote_reference);
     let local_reference = format!("refs/heads/{default_branch}");
+    let remote_name = remote::configured(project_root)
+        .map(|remote| remote.name)
+        .unwrap_or_else(|| "origin".to_owned());
     let local = remote::cached_commit(project_root, &local_reference);
     let source = match remote::fetch_branch(
         project_root,
+        &remote_name,
         default_branch,
         &remote_reference,
         &format!("the remote base branch {default_branch}"),
@@ -221,7 +229,7 @@ fn local_branch_references(
         label: match source {
             "remote" => default_branch.to_owned(),
             "cached" => format!("{default_branch} (cached)"),
-            _ if remote::has_origin(project_root) => format!("{default_branch} (local)"),
+            _ if remote::has_remote(project_root, &remote_name) => format!("{default_branch} (local)"),
             _ => default_branch.to_owned(),
         },
     })

@@ -86,7 +86,10 @@ export function useRunner() {
         createPullRequest: 'Creating pull request',
         updatePullRequest: 'Updating pull request',
         mergePullRequest: 'Merging pull request',
-        directToMain: 'Shipping directly to main',
+        directToMain: `Shipping directly to ${project.defaultBranch ?? 'default branch'}`,
+        pushBranch: `Pushing ${item.branch ?? 'branch'}`,
+        pushDefault: `Pushing ${project.defaultBranch ?? 'default branch'}`,
+        integrateToDefault: `Integrating and pushing ${project.defaultBranch ?? 'default branch'}`,
       };
       currentRun.value = {
         runId,

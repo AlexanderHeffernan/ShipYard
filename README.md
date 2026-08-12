@@ -1,10 +1,29 @@
 # Shipyard
 
-Shipyard is an opinionated desktop shipping queue for local Git work and GitHub pull requests.
+Shipyard is an opinionated desktop shipping queue for local Git work, GitHub pull requests, and safe push/integrate workflows for other configured Git remotes.
 
 - **Local Work** contains checked-out work that has not become a pull request.
 - **Pull Requests** contains open GitHub pull requests, their merge state, and any local work not yet pushed to them.
 - Merged and closed work leaves the queue.
+
+### Provider-agnostic shipping
+
+ShipYard prefers the `origin` remote and otherwise uses the first configured remote. It detects the
+default branch from that remote's symbolic `HEAD`, then falls back to common branch names only when
+the remote has not advertised one. The branch name is never assumed to be `main`.
+
+For a local checkout of the default branch, **Push `<default>`** confirms the operation, commits
+local changes with the selected coding agent when needed, and pushes with upstream tracking. For a
+feature branch or linked worktree, **Push branch** pushes only that branch and sets its upstream;
+**Integrate and push `<default>`** combines the latest default branch in an isolated worktree,
+reuses the selected agent for conflicts, and pushes the resolved result. These workflows use normal
+fast-forward-safe pushes, never force-push, preserve dirty work when a safeguard fails, and show
+progress and Git failures in the run console.
+
+These provider-agnostic actions intentionally use Git's remote protocol rather than a hosting
+provider API: they work with Azure DevOps, self-hosted Git, GitLab, and local/bare remotes, but do
+not create or merge provider-specific pull requests. GitHub PR creation, updating, checkout, and
+review-aware merge behavior remain available when the GitHub CLI is configured.
 
 Creating a pull request asks the configured coding agent to write the commit and pull-request metadata, commits local changes, checks compatibility with the latest default branch, pushes the branch, and opens the pull request. If Git finds a semantic merge conflict, Shipyard creates an isolated resolution worktree and asks the agent to resolve it before continuing.
 
@@ -17,6 +36,12 @@ Shipyard currently detects and supports:
 - [Amp](https://ampcode.com/)
 - [Codex](https://github.com/openai/codex)
 - GitHub through an authenticated [GitHub CLI](https://cli.github.com/) installation
+
+Azure DevOps validation covers Azure-style remote URL detection and the complete push/integrate
+state machine against local bare remotes, including a non-`main` default branch, linked worktrees,
+upstream setup, remote-ahead reconciliation, conflict resolution, dirty-checkout protection, and
+missing-remote errors. A live Azure DevOps push was not run in CI because it requires user
+credentials; the normal Git protocol path is deliberately the only Azure-specific dependency.
 
 Choose one preferred coding agent in the global Shipyard Settings modal. Agent use is automatic after selection.
 
