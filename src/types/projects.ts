@@ -45,6 +45,20 @@ export type Project = ScannedProject & {
   color: string;
 };
 
+export type WorkItemDiffRequest = {
+  projectPath: string;
+  projectId: string;
+  branch: string | null;
+  worktreePath: string | null;
+  headSha: string;
+  defaultBranch: string | null;
+};
+
+export type WorkItemDiff = {
+  patch: string;
+  comparisonLabel: string;
+};
+
 export type DeleteWorkItemRequest = {
   projectPath: string;
   projectId: string;

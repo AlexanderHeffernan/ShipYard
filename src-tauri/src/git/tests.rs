@@ -1,6 +1,7 @@
 use super::{
-    delete_work_item, inspect_work_item_deletion, scan_project, validate_worktree,
-    work_item::WorkItem, work_status::WorkStatus, worktree_paths, DeleteWorkItemRequest, Project,
+    delete_work_item, inspect_work_item_deletion, read_work_item_diff, scan_project,
+    validate_worktree, work_item::WorkItem, work_status::WorkStatus, worktree_paths,
+    DeleteWorkItemRequest, Project, WorkItemDiffRequest,
 };
 use std::{fs, path::Path, path::PathBuf, process::Command, time::SystemTime};
 
@@ -330,6 +331,54 @@ fn reports_uncommitted_and_unique_unpushed_work_for_confirmation() {
     fs::remove_dir_all(root).unwrap();
 }
 
+#[test]
+fn reads_committed_dirty_and_untracked_changes_for_a_checked_out_work_item() {
+    let root = committed_repository("diff-checked-out");
+    run(&root, &["switch", "-c", "feature/review"]);
+    fs::write(root.join("committed.txt"), "committed change\n").unwrap();
+    run(&root, &["add", "committed.txt"]);
+    run(&root, &["commit", "-m", "Add committed change"]);
+    fs::write(root.join("README.md"), "initial\ndirty change\n").unwrap();
+    fs::write(root.join("untracked.ts"), "export const ready = true;\n").unwrap();
+
+    let project = scan_project(root.to_str().unwrap()).unwrap();
+    let item = project
+        .work_items
+        .iter()
+        .find(|item| item.branch.as_deref() == Some("feature/review"))
+        .unwrap();
+    assert_eq!(item.additions, 2);
+    let diff = read_work_item_diff(diff_request(&project, item)).unwrap();
+
+    assert_eq!(diff.comparison_label, "main");
+    assert!(diff.patch.contains("b/committed.txt"));
+    assert!(diff.patch.contains("dirty change"));
+    assert!(diff.patch.contains("b/untracked.ts"));
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn reads_a_clean_branch_that_is_not_checked_out() {
+    let root = committed_repository("diff-unchecked");
+    run(&root, &["switch", "-c", "feature/unmounted"]);
+    fs::write(root.join("feature.txt"), "branch-only change\n").unwrap();
+    run(&root, &["add", "feature.txt"]);
+    run(&root, &["commit", "-m", "Add branch-only change"]);
+    run(&root, &["switch", "main"]);
+
+    let project = scan_project(root.to_str().unwrap()).unwrap();
+    let item = project
+        .work_items
+        .iter()
+        .find(|item| item.branch.as_deref() == Some("feature/unmounted"))
+        .unwrap();
+    assert!(item.worktree_path.is_none());
+    let diff = read_work_item_diff(diff_request(&project, item)).unwrap();
+
+    assert!(diff.patch.contains("branch-only change"));
+    fs::remove_dir_all(root).unwrap();
+}
+
 fn assert_branch_status(root: &Path, branch: &str, expected: WorkStatus) {
     let project = scan(root.to_str().unwrap()).unwrap();
     let item = project
@@ -364,6 +413,17 @@ fn deletion_request(project: &Project, item: &WorkItem) -> DeleteWorkItemRequest
         branch: item.branch.clone(),
         worktree_path: item.worktree_path.clone(),
         head_sha: item.head_sha.clone(),
+    }
+}
+
+fn diff_request(project: &Project, item: &WorkItem) -> WorkItemDiffRequest {
+    WorkItemDiffRequest {
+        project_path: project.path.clone(),
+        project_id: project.id.clone(),
+        branch: item.branch.clone(),
+        worktree_path: item.worktree_path.clone(),
+        head_sha: item.head_sha.clone(),
+        default_branch: project.default_branch.clone(),
     }
 }
 

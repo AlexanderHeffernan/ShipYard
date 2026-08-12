@@ -48,6 +48,15 @@ async fn scan_project(path: String) -> Result<git::Project, String> {
 }
 
 #[tauri::command]
+async fn get_work_item_diff(
+    request: git::WorkItemDiffRequest,
+) -> Result<git::WorkItemDiff, String> {
+    tauri::async_runtime::spawn_blocking(move || git::read_work_item_diff(request))
+        .await
+        .map_err(|error| format!("work item diff failed: {error}"))?
+}
+
+#[tauri::command]
 async fn inspect_work_item_deletion(
     request: git::DeleteWorkItemRequest,
 ) -> Result<git::DeletionPlan, String> {
@@ -227,6 +236,7 @@ pub fn run() {
             get_agent_configuration,
             save_agent_settings,
             scan_project,
+            get_work_item_diff,
             inspect_work_item_deletion,
             delete_work_item,
             get_github_status,
