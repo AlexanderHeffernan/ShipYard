@@ -379,6 +379,68 @@ fn reads_a_clean_branch_that_is_not_checked_out() {
     fs::remove_dir_all(root).unwrap();
 }
 
+#[test]
+fn reads_a_remote_pull_request_after_fetching_its_head() {
+    let root = committed_repository("diff-remote-pr");
+    let remote = root.with_extension("remote.git");
+    let review = root.with_extension("review");
+    run(&root, &["init", "--bare", remote.to_str().unwrap()]);
+    run(
+        &root,
+        &["remote", "add", "origin", remote.to_str().unwrap()],
+    );
+    run(&root, &["push", "-u", "origin", "main"]);
+    run(&root, &["switch", "-c", "feature/remote-review"]);
+    fs::write(root.join("remote-feature.txt"), "review remotely\n").unwrap();
+    run(&root, &["add", "remote-feature.txt"]);
+    run(&root, &["commit", "-m", "Add remote review change"]);
+    let head = text(&root, &["rev-parse", "HEAD"]);
+    run(&root, &["push", "origin", "HEAD:refs/pull/7/head"]);
+
+    fs::create_dir_all(&review).unwrap();
+    run(&review, &["init"]);
+    run(
+        &review,
+        &["remote", "add", "origin", remote.to_str().unwrap()],
+    );
+    run(
+        &review,
+        &[
+            "fetch",
+            "origin",
+            "refs/heads/main:refs/remotes/origin/main",
+        ],
+    );
+    run(
+        &review,
+        &["switch", "--create", "main", "refs/remotes/origin/main"],
+    );
+    let project = scan_project(review.to_str().unwrap()).unwrap();
+    let request = WorkItemDiffRequest {
+        project_path: project.path.clone(),
+        project_id: project.id.clone(),
+        branch: None,
+        worktree_path: None,
+        head_sha: head.clone(),
+        default_branch: Some("main".to_owned()),
+        pull_request_number: Some(7),
+    };
+
+    let diff = read_work_item_diff(request).unwrap();
+
+    assert!(diff.patch.contains("remote-feature.txt"));
+    assert_eq!(
+        text(
+            &review,
+            &["rev-parse", "refs/shipyard/pull-requests/7/head"],
+        ),
+        head
+    );
+    fs::remove_dir_all(root).unwrap();
+    fs::remove_dir_all(remote).unwrap();
+    fs::remove_dir_all(review).unwrap();
+}
+
 fn assert_branch_status(root: &Path, branch: &str, expected: WorkStatus) {
     let project = scan(root.to_str().unwrap()).unwrap();
     let item = project
@@ -424,6 +486,10 @@ fn diff_request(project: &Project, item: &WorkItem) -> WorkItemDiffRequest {
         worktree_path: item.worktree_path.clone(),
         head_sha: item.head_sha.clone(),
         default_branch: project.default_branch.clone(),
+        pull_request_number: item
+            .pull_request
+            .as_ref()
+            .map(|pull_request| pull_request.number),
     }
 }
 

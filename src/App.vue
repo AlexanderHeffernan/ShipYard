@@ -7,6 +7,7 @@ import AppSidebar from './components/sidebar/AppSidebar.vue';
 import ProjectSwitcher from './components/sidebar/ProjectSwitcher.vue';
 import ConfirmationDialog from './components/ui/ConfirmationDialog.vue';
 import { useProjects } from './composables/useProjects';
+import { useUpdates } from './composables/useUpdates';
 import { deleteWorkItem, inspectWorkItemDeletion } from './services/projects';
 import type { DeleteWorkItemRequest, DeletionPlan, Project, WorkItem } from './types/projects';
 
@@ -35,6 +36,7 @@ const {
   removeProject,
   disposeProjects,
 } = useProjects();
+const { startAutomaticChecks, stopAutomaticChecks } = useUpdates();
 const selection = computed(() => {
   for (const project of projects.value) {
     const workItem = project.workItems.find((item) => item.id === selectedWorkItemId.value);
@@ -43,8 +45,14 @@ const selection = computed(() => {
   return null;
 });
 
-onMounted(loadProjects);
-onBeforeUnmount(disposeProjects);
+onMounted(() => {
+  void loadProjects();
+  startAutomaticChecks();
+});
+onBeforeUnmount(() => {
+  disposeProjects();
+  stopAutomaticChecks();
+});
 watch(selection, (current) => {
   if (selectedWorkItemId.value && !current) selectedWorkItemId.value = null;
 });

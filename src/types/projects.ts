@@ -59,6 +59,7 @@ export type WorkItemDiffRequest = {
   worktreePath: string | null;
   headSha: string;
   defaultBranch: string | null;
+  pullRequestNumber: number | null;
 };
 
 export type WorkItemDiff = {
