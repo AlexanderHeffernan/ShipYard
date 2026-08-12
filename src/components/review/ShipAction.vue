@@ -31,7 +31,12 @@ const primaryLabel = computed(() => {
   if (pullRequest.mergeState === 'draft') return 'Draft PR';
   return 'Merge PR';
 });
-const unavailable = computed(() => !props.workItem.branch || !props.project.defaultBranch || !props.project.githubRepository || ((!props.workItem.pullRequest || needsUpdate.value) && !props.workItem.worktreePath));
+const unavailable = computed(() => {
+  if (!props.project.defaultBranch || !props.project.githubRepository) return true;
+  if (!props.workItem.pullRequest) return !props.workItem.branch || !props.workItem.worktreePath;
+  if (!needsUpdate.value) return false;
+  return !props.workItem.branch || !props.workItem.worktreePath;
+});
 
 async function primary() {
   if (active.value) return cancel();
@@ -66,7 +71,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeMenu));
 
 <template>
   <div ref="root" class="ship-control">
-    <button class="ship-control__main" :class="{ 'ship-control__main--single': workItem.pullRequest }" type="button" :disabled="anotherRunActive || blocked || unavailable" :title="unavailable ? (needsUpdate ? 'Check out this branch before updating its pull request' : 'Local shipping requires a checked-out branch connected to GitHub') : primaryLabel" @click="primary">
+    <button class="ship-control__main" :class="{ 'ship-control__main--single': workItem.pullRequest }" type="button" :disabled="anotherRunActive || blocked || unavailable" :title="unavailable ? (needsUpdate ? 'A checked-out local branch is required to update this pull request' : 'GitHub connection is required to ship this work') : primaryLabel" @click="primary">
       <svg viewBox="0 0 16 16" aria-hidden="true"><path v-if="active" d="M4.5 4.5h7v7h-7z"/><path v-else d="M2.5 9.5h11l-2 3h-7l-2-3Zm3-1V3.5l5 2.5-5 2.5Z"/></svg>
       <span>{{ primaryLabel }}</span>
     </button>

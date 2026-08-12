@@ -1,4 +1,4 @@
-use crate::git::{self, Project, PullRequest};
+use crate::git::{self, Project, PullRequest, WorkStatus};
 use serde::{Deserialize, Serialize};
 use std::{path::Path, process::Command};
 
@@ -22,9 +22,13 @@ struct GhPullRequest {
     merge_state_status: String,
     head_ref_name: String,
     head_ref_oid: String,
-    state: String,
     review_decision: String,
     status_check_rollup: Vec<GhCheck>,
+    #[serde(default)]
+    assignees: Vec<GhAccount>,
+    #[serde(default)]
+    review_requests: Vec<GhAccount>,
+    author: Option<GhAccount>,
 }
 
 #[derive(Deserialize)]
@@ -40,6 +44,11 @@ struct GhCheck {
 
 #[derive(Deserialize)]
 struct GhUser {
+    login: String,
+}
+
+#[derive(Deserialize)]
+struct GhAccount {
     login: String,
 }
 
@@ -85,6 +94,12 @@ pub(crate) fn enrich_project(root: &Path, project: &mut Project) {
         project.github_error = Some("GitHub CLI is not installed".to_owned());
         return;
     };
+    let user = command(&path, None, &["api", "user"])
+        .and_then(|value| serde_json::from_str::<GhUser>(&value).map_err(|error| error.to_string()));
+    let Ok(user) = user else {
+        project.github_error = Some("Sign in with `gh auth login` to load pull requests".to_owned());
+        return;
+    };
     let result = command(
         &path,
         Some(root),
@@ -94,28 +109,22 @@ pub(crate) fn enrich_project(root: &Path, project: &mut Project) {
             "--repo",
             &repository,
             "--state",
-            "all",
+            "open",
             "--limit",
             "100",
             "--json",
-            "number,title,url,isDraft,mergeStateStatus,headRefName,headRefOid,state,reviewDecision,statusCheckRollup",
+            "number,title,url,isDraft,mergeStateStatus,headRefName,headRefOid,reviewDecision,statusCheckRollup,assignees,reviewRequests,author",
         ],
     )
     .and_then(|value| serde_json::from_str::<Vec<GhPullRequest>>(&value).map_err(|e| e.to_string()));
     match result {
         Ok(pull_requests) => {
-            for item in &mut project.work_items {
-                let Some(branch) = item.branch.as_deref() else {
-                    continue;
-                };
-                let matching = pull_requests
-                    .iter()
-                    .filter(|pull_request| pull_request.head_ref_name == branch)
-                    .collect::<Vec<_>>();
-                if let Some(pull_request) = matching
-                    .iter()
-                    .find(|pull_request| pull_request.state == "OPEN")
-                {
+            for pull_request in &pull_requests {
+                let local_item = project.work_items.iter_mut().find(|item| {
+                    item.branch.as_deref() == Some(&pull_request.head_ref_name)
+                        || (item.branch.is_none() && item.head_sha == pull_request.head_ref_oid)
+                });
+                if let Some(item) = local_item {
                     let (local_commits, remote_commits) =
                         synchronization(root, &item.head_sha, &pull_request.head_ref_oid);
                     item.pull_request = Some(hydrate_pull_request(
@@ -123,15 +132,45 @@ pub(crate) fn enrich_project(root: &Path, project: &mut Project) {
                         local_commits,
                         remote_commits,
                     ));
-                    continue;
+                } else if relevant(pull_request, &user.login) {
+                    project.work_items.push(remote_pull_request_item(
+                        &project.id,
+                        pull_request,
+                    ));
                 }
-                item.completed = matching.iter().any(|pull_request| {
-                    pull_request.head_ref_oid == item.head_sha
-                        && matches!(pull_request.state.as_str(), "CLOSED" | "MERGED")
-                });
             }
+            project.work_items.sort_by_key(|item| std::cmp::Reverse(item.updated_at));
         }
         Err(error) => project.github_error = Some(error),
+    }
+}
+
+fn relevant(pull_request: &GhPullRequest, login: &str) -> bool {
+    pull_request.author.as_ref().is_some_and(|author| author.login == login)
+        || pull_request.assignees.iter().any(|assignee| assignee.login == login)
+        || pull_request
+            .review_requests
+            .iter()
+            .any(|reviewer| reviewer.login == login)
+}
+
+fn remote_pull_request_item(project_id: &str, pull_request: &GhPullRequest) -> git::WorkItem {
+    git::WorkItem {
+        id: format!("{project_id}::pull-request::{}", pull_request.number),
+        project_id: project_id.to_owned(),
+        branch: None,
+        worktree_path: None,
+        head_sha: pull_request.head_ref_oid.clone(),
+        last_commit_subject: pull_request.title.clone(),
+        status: WorkStatus::Ready,
+        pull_request: Some(hydrate_pull_request(pull_request, 0, 0)),
+        completed: false,
+        additions: 0,
+        deletions: 0,
+        changed_files: 0,
+        ahead: 0,
+        behind: 0,
+        updated_at: 0,
     }
 }
 

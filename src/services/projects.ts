@@ -2,6 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { open } from '@tauri-apps/plugin-dialog';
 import type {
+  CheckoutPullRequestRequest,
   DeleteWorkItemRequest,
   DeletionPlan,
   DeletionResult,
@@ -20,6 +21,10 @@ export async function chooseProjectDirectory() {
 
 export function scanProject(path: string) {
   return invoke<ScannedProject>('scan_project', { path });
+}
+
+export function checkoutPullRequest(request: CheckoutPullRequestRequest) {
+  return invoke<{ worktreePath: string }>('checkout_pull_request', { request });
 }
 
 export function inspectWorkItemDeletion(request: DeleteWorkItemRequest) {

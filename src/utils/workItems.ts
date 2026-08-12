@@ -3,12 +3,14 @@ import type { Project, WorkItem } from '../types/projects';
 export type PullRequestSyncState = 'synced' | 'localChanges' | 'localAhead' | 'remoteAhead' | 'diverged';
 
 export function workItemTitle(item: WorkItem) {
+  if (item.pullRequest && !item.branch) return item.pullRequest.title;
   if (item.branch) return item.branch;
   if (item.worktreePath) return fileName(item.worktreePath) || 'Detached worktree';
   return `Detached at ${item.headSha.slice(0, 7)}`;
 }
 
 export function workItemKind(project: Project, item: WorkItem) {
+  if (item.pullRequest && !item.worktreePath) return 'Remote pull request';
   if (!item.branch) return 'Detached worktree';
   if (item.worktreePath && item.worktreePath !== project.path) return 'Worktree';
   return 'Branch';

@@ -48,6 +48,17 @@ async fn scan_project(path: String) -> Result<git::Project, String> {
 }
 
 #[tauri::command]
+async fn checkout_pull_request(
+    app: tauri::AppHandle,
+    request: git::CheckoutPullRequestRequest,
+) -> Result<git::CheckoutPullRequestResult, String> {
+    let data_dir = app.path().app_data_dir().map_err(|error| error.to_string())?;
+    tauri::async_runtime::spawn_blocking(move || git::checkout_pull_request(&data_dir, request))
+        .await
+        .map_err(|error| format!("pull request checkout failed: {error}"))?
+}
+
+#[tauri::command]
 async fn inspect_work_item_deletion(
     request: git::DeleteWorkItemRequest,
 ) -> Result<git::DeletionPlan, String> {
@@ -227,6 +238,7 @@ pub fn run() {
             get_agent_configuration,
             save_agent_settings,
             scan_project,
+            checkout_pull_request,
             inspect_work_item_deletion,
             delete_work_item,
             get_github_status,

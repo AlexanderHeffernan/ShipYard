@@ -49,11 +49,11 @@ fn prepare_with_adapter(
     adapter: &dyn agents::AgentAdapter,
 ) -> Result<PreparedShipping, String> {
     let source = git::validate_worktree(&request.project_id, &request.source_path)?;
-    let branch = request
-        .source_branch
-        .as_deref()
-        .ok_or_else(|| "Create a branch before shipping this work".to_owned())?;
-    if branch == request.default_branch {
+    let branch = request.source_branch.as_deref();
+    if !matches!(request.action, ShippingAction::MergePullRequest) && branch.is_none() {
+        return Err("Create a branch before shipping this work".to_owned());
+    }
+    if branch == Some(request.default_branch.as_str()) {
         return Err("Work on the default branch cannot be shipped as a pull request".to_owned());
     }
     if request.github_repository.split('/').count() != 2 {
@@ -100,7 +100,7 @@ fn prepare_with_adapter(
         cleanup: matches!(request.action, ShippingAction::DirectToMain).then(|| ShippingCleanup {
             project_id: request.project_id,
             source,
-            branch: branch.to_owned(),
+            branch: branch.unwrap_or_default().to_owned(),
             base: request.default_branch,
             receipt: shipped_commit_path,
         }),
@@ -298,6 +298,19 @@ fi"#
                 .ok_or_else(|| "Pull request number is required".to_owned())?;
             format!(
                 r#"
+{local_guard}
+if [[ -n "${{source_sha:-}}" ]] && ! git -C "$source" merge-tree --write-tree "$source_sha" "origin/$base" >/dev/null; then
+  integrate_target "$source_sha" "origin/$base" "branch conflicts with origin/$base"
+  git -C "$source" push origin "$RESOLVED_SHA:refs/heads/$branch"
+fi
+echo "Shipyard · merging pull request #{number}"
+gh pr merge {number} --repo "$repository" --squash --delete-branch
+git -C "$source" fetch --prune origin
+echo "Shipyard · pull request merged"
+"#,
+                number = number,
+                local_guard = request.source_branch.as_deref().map(|branch| format!(
+                    r#"branch={branch}
 git -C "$source" fetch origin "$base" "$branch"
 if [[ "$(git -C "$source" branch --show-current)" == "$branch" ]] &&
    [[ -n "$(git -C "$source" status --porcelain --untracked-files=normal)" ]]; then
@@ -310,16 +323,9 @@ if [[ "$local_sha" != "$source_sha" ]]; then
   echo "Shipyard · local commits are not synchronized with the pull request; update it before merging" >&2
   exit 1
 fi
-if ! git -C "$source" merge-tree --write-tree "$source_sha" "origin/$base" >/dev/null; then
-  integrate_target "$source_sha" "origin/$base" "branch conflicts with origin/$base"
-  git -C "$source" push origin "$RESOLVED_SHA:refs/heads/$branch"
-fi
-echo "Shipyard · merging pull request #{number}"
-gh pr merge {number} --repo "$repository" --squash --delete-branch
-git -C "$source" fetch --prune origin
-echo "Shipyard · pull request merged"
 "#,
-                number = number,
+                    branch = shell_text(branch),
+                )).unwrap_or_else(|| "git -C \"$source\" fetch origin \"$base\"\n".to_owned()),
             )
         }
     };
