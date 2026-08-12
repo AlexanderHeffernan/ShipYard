@@ -4,12 +4,20 @@ import { Check, Eye, Sparkles } from '@lucide/vue';
 import AppButton from '../ui/AppButton.vue';
 import {
   completionAnimationOptions,
+  completionAnimationSpeedOptions,
   type CompletionAnimation,
+  type CompletionAnimationSpeed,
 } from '../../types/celebration';
-import { getCompletionAnimation, setCompletionAnimation } from '../../services/completionAnimation';
+import {
+  getCompletionAnimation,
+  getCompletionAnimationSpeed,
+  setCompletionAnimation,
+  setCompletionAnimationSpeed,
+} from '../../services/completionAnimation';
 
-const emit = defineEmits<{ preview: [animation: CompletionAnimation] }>();
+const emit = defineEmits<{ preview: [animation: CompletionAnimation, speed: CompletionAnimationSpeed] }>();
 const selectedAnimation = ref<CompletionAnimation>(getCompletionAnimation());
+const selectedSpeed = ref<CompletionAnimationSpeed>(getCompletionAnimationSpeed());
 const saved = ref(false);
 const previewing = ref(false);
 let savedTimer: number | undefined;
@@ -27,9 +35,16 @@ function chooseAnimation(event: Event) {
   savedTimer = window.setTimeout(() => (saved.value = false), 1400);
 }
 
+function chooseSpeed(event: Event) {
+  selectedSpeed.value = setCompletionAnimationSpeed((event.target as HTMLSelectElement).value);
+  saved.value = true;
+  window.clearTimeout(savedTimer);
+  savedTimer = window.setTimeout(() => (saved.value = false), 1400);
+}
+
 function previewAnimation() {
   previewing.value = true;
-  emit('preview', selectedAnimation.value);
+  emit('preview', selectedAnimation.value, selectedSpeed.value);
   window.clearTimeout(previewTimer);
   previewTimer = window.setTimeout(() => (previewing.value = false), 1400);
 }
@@ -54,13 +69,28 @@ onBeforeUnmount(() => {
       <div class="experimental-card__icon"><Sparkles aria-hidden="true" /></div>
       <div class="experimental-card__content">
         <label for="completion-animation">Completion animation</label>
-        <p>Shown once after a merge or push really completes. The default stays out of the way; the other ten options fill the screen.</p>
+        <p>Shown once after a merge or push really completes. The default stays out of the way; the other eleven options fill the screen.</p>
         <div class="experimental-card__controls">
           <select id="completion-animation" :value="selectedAnimation" @change="chooseAnimation">
             <option v-for="option in completionAnimationOptions" :key="option.id" :value="option.id">
-              {{ option.label }}{{ option.default ? ' · Default' : '' }}
+              {{ option.label }}
             </option>
           </select>
+          <div class="experimental-card__speed">
+            <span>Speed</span>
+            <select
+              id="completion-animation-speed"
+              :value="selectedSpeed"
+              :disabled="!selectedOption.fullScreen"
+              aria-label="Full-screen animation speed"
+              :title="selectedOption.fullScreen ? 'Full-screen animation speed' : 'Quiet handoff has no full-screen animation'"
+              @change="chooseSpeed"
+            >
+              <option v-for="option in completionAnimationSpeedOptions" :key="option.id" :value="option.id">
+                {{ option.label }}
+              </option>
+            </select>
+          </div>
           <AppButton
             variant="ghost"
             size="small"
@@ -83,7 +113,7 @@ onBeforeUnmount(() => {
     </section>
 
     <p class="experimental-note">
-      Preview is intentional and never changes project state. The automatic celebration is only triggered by a successful shipping run.
+      Preview is intentional and never changes project state. Speed applies to full-screen animations; Quiet handoff uses a short, gentle receipt.
     </p>
   </main>
 </template>
@@ -205,6 +235,31 @@ onBeforeUnmount(() => {
   box-shadow: 0 0 0 2px rgba(251, 119, 31, 0.16);
 }
 
+.experimental-card select:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.experimental-card__speed {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.experimental-card__speed > span {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.experimental-card__speed select {
+  width: 112px;
+  flex: 0 0 112px;
+}
+
 .experimental-card__controls :deep(.app-button) {
   flex: 0 0 auto;
 }
@@ -256,6 +311,15 @@ onBeforeUnmount(() => {
   .experimental-card__controls {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .experimental-card__speed {
+    justify-content: space-between;
+  }
+
+  .experimental-card__speed select {
+    width: auto;
+    flex: 1;
   }
 
   .experimental-card__selection {

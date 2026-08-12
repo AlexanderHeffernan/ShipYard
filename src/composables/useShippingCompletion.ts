@@ -1,12 +1,19 @@
 import { ref } from 'vue';
-import type { CompletionAnimation } from '../types/celebration';
+import type { CompletionAnimation, CompletionAnimationSpeed } from '../types/celebration';
 import type { RunState } from '../types/run';
 import type { ShippingAction } from '../types/shipping';
+
+export type ShippingCompletionDetails = {
+  workItemLabel: string;
+  destination: string;
+};
 
 export type ShippingCompletion = {
   runId: string;
   action: ShippingAction;
   animation: CompletionAnimation;
+  speed: CompletionAnimationSpeed;
+  details: ShippingCompletionDetails;
   preview: boolean;
 };
 
@@ -26,6 +33,8 @@ export function reduceShippingCompletion(
   state: ShippingCompletionState,
   run: RunState | null,
   animation: CompletionAnimation,
+  speed: CompletionAnimationSpeed = 'normal',
+  details?: ShippingCompletionDetails,
 ): ShippingCompletionState {
   if (
     !run
@@ -43,6 +52,13 @@ export function reduceShippingCompletion(
       runId: run.runId,
       action: run.shippingAction,
       animation,
+      speed,
+      details: details ?? {
+        workItemLabel: run.scriptLabel,
+        destination: run.shippingAction === 'mergePullRequest' || run.shippingAction === 'directToMain'
+          ? 'the main line'
+          : 'a pull request',
+      },
       preview: false,
     },
     lastCompletedRunId: run.runId,
@@ -56,6 +72,7 @@ export function dismissShippingCompletion(state: ShippingCompletionState): Shipp
 export function previewShippingCompletion(
   state: ShippingCompletionState,
   animation: CompletionAnimation,
+  speed: CompletionAnimationSpeed = 'normal',
 ): ShippingCompletionState {
   return {
     ...state,
@@ -64,6 +81,11 @@ export function previewShippingCompletion(
       runId: `preview-${animation}-${Date.now()}`,
       action: 'directToMain',
       animation,
+      speed,
+      details: {
+        workItemLabel: 'your work',
+        destination: 'the main line',
+      },
       preview: true,
     },
   };
@@ -72,16 +94,21 @@ export function previewShippingCompletion(
 export function useShippingCompletion() {
   const state = ref<ShippingCompletionState>({ ...initialShippingCompletionState });
 
-  function observeRun(run: RunState | null, animation: CompletionAnimation) {
-    state.value = reduceShippingCompletion(state.value, run, animation);
+  function observeRun(
+    run: RunState | null,
+    animation: CompletionAnimation,
+    speed: CompletionAnimationSpeed = 'normal',
+    details?: ShippingCompletionDetails,
+  ) {
+    state.value = reduceShippingCompletion(state.value, run, animation, speed, details);
   }
 
   function dismiss() {
     state.value = dismissShippingCompletion(state.value);
   }
 
-  function preview(animation: CompletionAnimation) {
-    state.value = previewShippingCompletion(state.value, animation);
+  function preview(animation: CompletionAnimation, speed: CompletionAnimationSpeed = 'normal') {
+    state.value = previewShippingCompletion(state.value, animation, speed);
   }
 
   return { state, observeRun, dismiss, preview };

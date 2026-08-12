@@ -1,6 +1,8 @@
 import {
   readCompletionAnimation,
+  readCompletionAnimationSpeed,
   saveCompletionAnimation,
+  saveCompletionAnimationSpeed,
   type CompletionAnimationStorage,
 } from '../types/celebration';
 
@@ -13,4 +15,15 @@ export function setCompletionAnimation(
   storage?: CompletionAnimationStorage,
 ) {
   return saveCompletionAnimation(animation, storage);
+}
+
+export function getCompletionAnimationSpeed(storage?: CompletionAnimationStorage) {
+  return readCompletionAnimationSpeed(storage);
+}
+
+export function setCompletionAnimationSpeed(
+  speed: unknown,
+  storage?: CompletionAnimationStorage,
+) {
+  return saveCompletionAnimationSpeed(speed, storage);
 }

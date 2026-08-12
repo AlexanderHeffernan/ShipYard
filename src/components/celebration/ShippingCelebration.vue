@@ -2,8 +2,10 @@
 import { Check, X } from '@lucide/vue';
 import { computed, onBeforeUnmount, onMounted, ref, useId } from 'vue';
 import {
+  completionAnimationSpeedMultiplier,
   isFullScreenCompletionAnimation,
   type CompletionAnimation,
+  type CompletionAnimationSpeed,
 } from '../../types/celebration';
 import type { ShippingCompletion } from '../../composables/useShippingCompletion';
 
@@ -20,7 +22,15 @@ const closeButton = ref<HTMLButtonElement>();
 const reducedMotion = ref(false);
 const closing = ref(false);
 const animation = computed<CompletionAnimation>(() => props.completion.animation);
+const speed = computed<CompletionAnimationSpeed>(() => props.completion.speed);
 const quietHandoff = computed(() => !isFullScreenCompletionAnimation(animation.value));
+const speedMultiplier = computed(() => completionAnimationSpeedMultiplier(speed.value));
+const effectiveSpeedMultiplier = computed(() => quietHandoff.value ? 1 : speedMultiplier.value);
+const timingStyle = computed(() => ({
+  '--celebration-speed': effectiveSpeedMultiplier.value,
+  '--celebration-entry-duration': `${Math.round(360 * effectiveSpeedMultiplier.value)}ms`,
+  '--celebration-exit-duration': `${Math.round(360 * effectiveSpeedMultiplier.value)}ms`,
+}));
 const confettiPieces = Array.from({ length: 28 }, (_, index) => ({
   id: index,
   x: `${((index * 47) % 360) - 180}px`,
@@ -48,23 +58,59 @@ const fireworkBursts = [
   { id: 'right', className: 'firework-sky__burst--right', color: '#a78bfa', delay: '540ms' },
 ];
 const fireworkAngles = Array.from({ length: 12 }, (_, index) => `${index * 30}deg`);
+const shipyardReflectionBands = Array.from({ length: 10 }, (_, index) => ({
+  id: index,
+  width: `${13 + index * 5.6}%`,
+  top: `${72 + index * 2.05}%`,
+  color: index % 2 === 0 ? '#f56d3d' : '#a93255',
+}));
+const shipyardRipples = Array.from({ length: 17 }, (_, index) => {
+  const y = 560 + index * 14;
+  const spread = 28 + index * 24;
+  const amplitude = index % 3 === 0 ? 5 : 3;
+  const points = (start: number, end: number) => {
+    const result: string[] = [];
+    const steps = Math.max(3, Math.floor((end - start) / 26));
+    for (let point = 0; point <= steps; point += 1) {
+      const x = start + ((end - start) * point) / steps;
+      const offset = point % 2 === 0 ? -amplitude : amplitude;
+      result.push(`${x.toFixed(1)} ${(y + offset).toFixed(1)}`);
+    }
+    return result.join(' L ');
+  };
+
+  return {
+    id: index,
+    d: `M ${points(600 - spread, 590)} M ${points(610, 600 + spread)}`,
+    color: index % 4 === 0 ? '#f47731' : index % 3 === 0 ? '#d74951' : '#8f2b4b',
+    opacity: 0.34 + (index % 4) * 0.1,
+    delay: `${index * 90}ms`,
+  };
+});
 
 const copy = computed(() => {
+  if (quietHandoff.value) {
+    const label = props.completion.details.workItemLabel || 'work item';
+    const destination = props.completion.details.destination || 'the main line';
+    const title = props.completion.preview ? 'Shipped your work' : `Shipped ${label}`;
+    return {
+      eyebrow: props.completion.preview ? 'Quiet handoff preview' : 'Shipping complete',
+      title,
+      detail: props.completion.preview
+        ? `A calm confirmation for ${destination}. No project state changed.`
+        : `Delivered to ${destination}.`,
+      announcement: props.completion.preview
+        ? `Previewing the quiet handoff for ${label}. No project state changed.`
+        : `Shipping completed successfully. ${label} was delivered to ${destination}.`,
+    };
+  }
+
   if (props.completion.preview) {
     return {
       eyebrow: 'Completion animation preview',
       title: 'Ship it with confidence',
       detail: 'This is a preview only. No branch, worktree, or remote state changed.',
       announcement: `Previewing the ${animation.value} completion animation. No project state changed.`,
-    };
-  }
-
-  if (quietHandoff.value) {
-    return {
-      eyebrow: 'Shipped',
-      title: 'Work item shipped',
-      detail: 'The changes are safely on their way. Pick your next item when you’re ready.',
-      announcement: 'Shipping completed successfully. The work item was shipped.',
     };
   }
 
@@ -109,11 +155,33 @@ function updateReducedMotion() {
   reducedMotion.value = mediaQuery?.matches ?? false;
 }
 
+function scaleTimingList(value: string, multiplier: number) {
+  return value.split(',').map((part) => {
+    const match = part.trim().match(/^(-?[\d.]+)(ms|s)$/);
+    if (!match) return part.trim();
+    return `${Number(match[1]) * multiplier}${match[2]}`;
+  }).join(', ');
+}
+
+function applyAnimationSpeed() {
+  if (!root.value || effectiveSpeedMultiplier.value === 1 || reducedMotion.value) return;
+  const elements = Array.from(root.value.querySelectorAll<HTMLElement | SVGElement>('*'));
+  for (const element of elements) {
+    const styles = window.getComputedStyle(element);
+    if (styles.animationName === 'none') continue;
+    element.style.animationDuration = scaleTimingList(styles.animationDuration, effectiveSpeedMultiplier.value);
+    element.style.animationDelay = scaleTimingList(styles.animationDelay, effectiveSpeedMultiplier.value);
+  }
+}
+
 function requestClose() {
   if (closing.value) return;
   window.clearTimeout(closeTimer);
   closing.value = true;
-  exitTimer = window.setTimeout(() => emit('close'), reducedMotion.value ? 120 : 360);
+  exitTimer = window.setTimeout(
+    () => emit('close'),
+    reducedMotion.value ? 120 : Math.round(360 * effectiveSpeedMultiplier.value),
+  );
 }
 
 function onKeydown(event: KeyboardEvent) {
@@ -143,8 +211,13 @@ onMounted(() => {
   updateReducedMotion();
   mediaQuery.addEventListener?.('change', updateReducedMotion);
   window.addEventListener('keydown', onKeydown);
-  closeButton.value?.focus({ preventScroll: true });
-  closeTimer = window.setTimeout(requestClose, reducedMotion.value ? 1800 : quietHandoff.value ? 2900 : 5200);
+  if (!quietHandoff.value || props.completion.preview) closeButton.value?.focus({ preventScroll: true });
+  applyAnimationSpeed();
+  const baseDuration = quietHandoff.value ? 3000 : 4600;
+  closeTimer = window.setTimeout(
+    requestClose,
+    reducedMotion.value ? 1800 : Math.round(baseDuration * effectiveSpeedMultiplier.value),
+  );
 });
 
 onBeforeUnmount(() => {
@@ -162,11 +235,12 @@ onBeforeUnmount(() => {
     data-modal-layer="top"
     class="celebration"
     :class="[`celebration--${animation}`, { 'celebration--preview': completion.preview, 'celebration--reduced': reducedMotion, 'celebration--closing': closing }]"
-    role="dialog"
-    aria-modal="true"
-    :aria-labelledby="completion.preview ? undefined : titleId"
-    :aria-describedby="completion.preview ? undefined : descriptionId"
-    :aria-label="completion.preview ? 'Completion animation preview' : undefined"
+    :style="timingStyle"
+    :role="quietHandoff && !completion.preview ? 'status' : 'dialog'"
+    :aria-modal="quietHandoff && !completion.preview ? undefined : 'true'"
+    :aria-labelledby="quietHandoff ? titleId : undefined"
+    :aria-describedby="quietHandoff ? descriptionId : undefined"
+    :aria-label="quietHandoff ? undefined : 'Completion animation preview'"
     @keydown="onKeydown"
     @click.self="requestClose"
   >
@@ -177,9 +251,68 @@ onBeforeUnmount(() => {
         <div class="quiet-handoff__glow"></div>
         <div class="quiet-handoff__line quiet-handoff__line--one"></div>
         <div class="quiet-handoff__line quiet-handoff__line--two"></div>
-        <div v-if="completion.preview" class="quiet-handoff__preview-mark">
-          <Check aria-hidden="true" />
+      </template>
+
+      <template v-else-if="animation === 'shipyard-sunset'">
+        <svg class="shipyard-sunset__art" viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid slice">
+          <defs>
+            <linearGradient id="shipyard-sunset-sky" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#241232" />
+              <stop offset="0.46" stop-color="#8d1e47" />
+              <stop offset="0.76" stop-color="#f4472d" />
+              <stop offset="1" stop-color="#ff8b24" />
+            </linearGradient>
+            <radialGradient id="shipyard-sunset-sun" cx="50%" cy="50%" r="50%">
+              <stop offset="0" stop-color="#ffe66b" />
+              <stop offset="0.7" stop-color="#ffb82e" />
+              <stop offset="1" stop-color="#ff6a24" />
+            </radialGradient>
+            <linearGradient id="shipyard-sunset-water" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#9d2748" />
+              <stop offset="0.35" stop-color="#661d3c" />
+              <stop offset="1" stop-color="#23142e" />
+            </linearGradient>
+            <filter id="shipyard-sunset-grain" x="0" y="0" width="100%" height="100%">
+              <feTurbulence type="fractalNoise" baseFrequency="0.78" numOctaves="2" seed="17" />
+              <feColorMatrix type="saturate" values="0" />
+            </filter>
+          </defs>
+          <rect width="1200" height="800" fill="url(#shipyard-sunset-sky)" />
+          <circle class="shipyard-sunset__sun" cx="600" cy="285" r="230" fill="url(#shipyard-sunset-sun)" />
+          <path class="shipyard-sunset__dock" d="M0 535V410h55v58h24v31h24v20h27v18h28v-2h25v35H0Z" />
+          <path class="shipyard-sunset__dock" d="M1200 535V410h-55v58h-24v31h-24v20h-27v18h-28v-2h-25v35h183Z" />
+          <rect y="535" width="1200" height="265" fill="url(#shipyard-sunset-water)" />
+          <path class="shipyard-sunset__dock-pier" d="M0 526h183v25H0Zm1200 0h-183v25h183Z" />
+          <path class="shipyard-sunset__bollard" d="M143 526v-32m-13 0h26m-20 0v-10m14 10v-10M1057 526v-32m-13 0h26m-20 0v-10m14 10v-10" />
+          <ellipse class="shipyard-sunset__reflection" cx="600" cy="566" rx="172" ry="22" />
+          <g class="shipyard-sunset__ripples">
+            <path
+              v-for="ripple in shipyardRipples"
+              :key="ripple.id"
+              :d="ripple.d"
+              :stroke="ripple.color"
+              :opacity="ripple.opacity"
+              :style="{ animationDelay: ripple.delay }"
+            />
+          </g>
+          <rect width="1200" height="800" filter="url(#shipyard-sunset-grain)" opacity="0.045" />
+        </svg>
+        <div class="shipyard-sunset__reflection-overlay">
+          <span
+            v-for="band in shipyardReflectionBands"
+            :key="band.id"
+            class="shipyard-sunset__reflection-strip"
+            :style="{ display: 'block', width: band.width, top: band.top, height: '6px', opacity: '0.7', background: band.color }"
+          ></span>
         </div>
+        <svg class="shipyard-sunset__vessel" viewBox="0 0 300 300" aria-hidden="true">
+          <path class="shipyard-sunset__vessel-mast" d="M150 20v78m-36-50h72" />
+          <rect class="shipyard-sunset__vessel-bridge" x="90" y="82" width="120" height="57" rx="4" />
+          <path class="shipyard-sunset__vessel-windows" d="M103 96h23v12h-23zm35 0h23v12h-23zm35 0h23v12h-23z" />
+          <path class="shipyard-sunset__vessel-hull" d="m150 136 110 52-17 53-33 39-60 12-60-12-33-39-17-53 110-52Z" />
+          <path class="shipyard-sunset__vessel-keel" d="m150 258 60 22-60 12-60-12 60-22Z" />
+          <path class="shipyard-sunset__vessel-hawseholes" d="m83 189 26-12 11 19-26 12zm134 0-26-12-11 19 26 12z" />
+        </svg>
       </template>
 
       <template v-else-if="animation === 'sail-away'">
@@ -290,7 +423,22 @@ onBeforeUnmount(() => {
       </template>
     </div>
 
-    <section v-if="!completion.preview" class="celebration__content" :class="{ 'celebration__content--quiet': quietHandoff }">
+    <section v-if="quietHandoff" class="quiet-handoff__receipt">
+      <div class="quiet-handoff__ship-icon" aria-hidden="true">
+        <svg viewBox="0 0 96 112">
+          <path d="M48 7v27m-18-12h36" />
+          <rect x="24" y="34" width="48" height="27" rx="3" />
+          <path class="quiet-handoff__ship-windows" d="M30 40h8v6h-8zm14 0h8v6h-8zm14 0h8v6h-8z" />
+          <path d="m48 46 38 21-7 20-14 17-17 7-17-7-14-17-7-20 38-21Z" />
+          <path class="quiet-handoff__ship-hawseholes" d="m27 69 9-4 4 7-9 4zm42 0-9-4-4 7 9 4z" />
+        </svg>
+      </div>
+      <span class="celebration__eyebrow"><i></i>{{ copy.eyebrow }}</span>
+      <h1 :id="titleId">{{ copy.title }}</h1>
+      <p :id="descriptionId">{{ copy.detail }}</p>
+    </section>
+
+    <section v-else-if="!completion.preview" class="celebration__content">
       <div class="celebration__success-mark">
         <span class="celebration__success-ring celebration__success-ring--one"></span>
         <span class="celebration__success-ring celebration__success-ring--two"></span>
@@ -303,6 +451,13 @@ onBeforeUnmount(() => {
         <span>Done</span>
         <X aria-hidden="true" />
       </button>
+    </section>
+
+    <section v-if="completion.preview && reducedMotion && !quietHandoff" class="celebration__reduced-preview">
+      <div class="celebration__success-mark" aria-hidden="true"><Check /></div>
+      <span class="celebration__eyebrow"><i></i>Preview ready</span>
+      <h1>{{ copy.title }}</h1>
+      <p>{{ copy.detail }}</p>
     </section>
 
     <button
@@ -337,7 +492,7 @@ onBeforeUnmount(() => {
   color: var(--text-primary);
   background: #100d18;
   isolation: isolate;
-  animation: celebration-in 360ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+  animation: celebration-in var(--celebration-entry-duration) cubic-bezier(0.2, 0.75, 0.25, 1) both;
 }
 
 .celebration--quiet-handoff {
@@ -348,8 +503,18 @@ onBeforeUnmount(() => {
   pointer-events: none;
 }
 
+.celebration--quiet-handoff.celebration--preview {
+  position: fixed;
+  background: #100d18;
+  pointer-events: auto;
+}
+
 .celebration--quiet-handoff .celebration__backdrop {
   display: none;
+}
+
+.celebration--quiet-handoff.celebration--preview .celebration__backdrop {
+  display: block;
 }
 
 .celebration--quiet-handoff.celebration--preview .quiet-handoff__glow,
@@ -358,7 +523,7 @@ onBeforeUnmount(() => {
 }
 
 .celebration--closing {
-  animation: celebration-out 360ms ease both;
+  animation: celebration-out var(--celebration-exit-duration) ease both;
   pointer-events: none;
 }
 
@@ -411,6 +576,10 @@ onBeforeUnmount(() => {
   z-index: 0;
 }
 
+.celebration--quiet-handoff .quiet-handoff__receipt {
+  pointer-events: none;
+}
+
 .celebration__content {
   position: relative;
   z-index: 3;
@@ -432,12 +601,78 @@ onBeforeUnmount(() => {
   pointer-events: auto;
 }
 
-.celebration__content--quiet {
-  width: min(320px, calc(100vw - 42px));
-  padding: 24px 26px 22px;
-  border-radius: 16px;
-  box-shadow: 0 18px 58px rgba(5, 3, 8, 0.42), inset 0 1px rgba(255, 255, 255, 0.06);
-  animation: quiet-receipt-in 460ms 80ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+
+.quiet-handoff__receipt {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  width: min(500px, calc(100vw - 48px));
+  align-items: center;
+  flex-direction: column;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+  opacity: 0;
+  animation: quiet-receipt-in 520ms 260ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+}
+
+.quiet-handoff__ship-icon {
+  display: grid;
+  width: 116px;
+  height: 116px;
+  margin-bottom: 22px;
+  place-items: center;
+  color: #11101b;
+  background:
+    radial-gradient(circle at 50% 42%, #ffe66b 0 34%, #ffb12f 35% 50%, transparent 51%),
+    linear-gradient(160deg, #70204b, #e64037 56%, #f77a24);
+  border: 1px solid rgba(255, 224, 164, 0.44);
+  border-radius: 30px;
+  box-shadow: 0 0 0 10px rgba(251, 119, 31, 0.07), 0 20px 54px rgba(251, 119, 31, 0.2), inset 0 1px rgba(255, 255, 255, 0.26);
+}
+
+.quiet-handoff__ship-icon svg {
+  width: 78px;
+  height: 92px;
+  overflow: visible;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.8;
+  filter: drop-shadow(0 2px 1px rgba(255, 209, 102, 0.12));
+}
+
+.quiet-handoff__ship-icon rect,
+.quiet-handoff__ship-icon path:not(.quiet-handoff__ship-windows):not(.quiet-handoff__ship-hawseholes) {
+  fill: currentColor;
+}
+
+.quiet-handoff__ship-icon .quiet-handoff__ship-windows {
+  fill: #ffb12f;
+  stroke: none;
+}
+
+.quiet-handoff__ship-icon .quiet-handoff__ship-hawseholes {
+  fill: #ffb12f;
+  stroke: none;
+}
+
+.quiet-handoff__receipt h1 {
+  max-width: 460px;
+  margin: 0;
+  font-size: clamp(24px, 3.8vw, 34px);
+  font-weight: 650;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+}
+
+.quiet-handoff__receipt p {
+  max-width: 390px;
+  margin: 11px 0 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-secondary);
 }
 
 .celebration__success-mark {
@@ -453,27 +688,6 @@ onBeforeUnmount(() => {
   border-radius: 24px;
   box-shadow: 0 0 0 8px rgba(251, 119, 31, 0.08), 0 12px 34px rgba(251, 119, 31, 0.25), inset 0 1px rgba(255, 255, 255, 0.42);
   transform: rotate(-4deg);
-}
-
-.celebration__content--quiet .celebration__success-mark {
-  width: 58px;
-  height: 58px;
-  margin-bottom: 14px;
-  border-radius: 18px;
-  transform: none;
-}
-
-.celebration__content--quiet .celebration__success-mark svg {
-  width: 28px;
-  height: 28px;
-}
-
-.celebration__content--quiet .celebration__success-ring {
-  display: none;
-}
-
-.celebration__content--quiet .celebration__dismiss {
-  margin-top: 18px;
 }
 
 .celebration__success-mark svg {
@@ -651,38 +865,127 @@ onBeforeUnmount(() => {
 .quiet-handoff__line--one { top: 42%; }
 .quiet-handoff__line--two { top: 58%; animation-delay: 260ms; opacity: 0.5; }
 
-.quiet-handoff__preview-mark {
+
+/* Shipyard sunset — a faithful, front-facing cargo-ship reading of the app icon. */
+.shipyard-sunset__art {
   position: absolute;
-  top: 50%;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.shipyard-sunset__reflection-overlay {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  pointer-events: none;
+}
+
+.shipyard-sunset__reflection-strip {
+  position: absolute;
   left: 50%;
-  display: grid;
-  width: 58px;
-  height: 58px;
-  place-items: center;
-  color: var(--primary-foreground);
-  background: linear-gradient(145deg, #ffb14a, var(--celebration-orange));
-  border: 1px solid rgba(255, 236, 209, 0.72);
-  border-radius: 18px;
-  box-shadow: 0 0 0 8px rgba(251, 119, 31, 0.08), 0 12px 34px rgba(251, 119, 31, 0.25), inset 0 1px rgba(255, 255, 255, 0.42);
-  transform: translate(-50%, -50%);
-  opacity: 0;
-  animation: quiet-mark-in 480ms 300ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+  height: clamp(3px, 0.6vh, 6px);
+  border-radius: 999px;
+  box-shadow: 0 0 9px currentColor;
+  transform: translateX(-50%);
 }
 
-.celebration--quiet-handoff.celebration--preview .quiet-handoff__preview-mark {
-  position: fixed;
-  top: auto;
-  right: 28px;
-  bottom: 28px;
-  left: auto;
-  transform: none;
-  animation: quiet-preview-mark-in 480ms 300ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+.shipyard-sunset__sun {
+  transform-origin: 600px 285px;
+  animation: sunset-sun-breathe 5200ms 120ms ease-in-out both;
 }
 
-.quiet-handoff__preview-mark svg {
-  width: 28px;
-  height: 28px;
-  stroke-width: 2.5;
+.shipyard-sunset__dock {
+  fill: #0b0a14;
+}
+
+.shipyard-sunset__dock-pier {
+  fill: #0b0a14;
+}
+
+.shipyard-sunset__bollard {
+  fill: none;
+  stroke: #0b0a14;
+  stroke-linecap: square;
+  stroke-width: 7;
+}
+
+.shipyard-sunset__reflection {
+  fill: rgba(255, 123, 45, 0.3);
+  filter: blur(7px);
+  animation: sunset-reflection 4200ms 420ms ease-in-out both;
+}
+
+.shipyard-sunset__ripples path {
+  fill: none;
+  stroke-linecap: round;
+  stroke-width: 3;
+  stroke-dasharray: 9 11;
+  animation: sunset-ripple 4200ms ease-out both;
+}
+
+.shipyard-sunset__vessel {
+  position: absolute;
+  z-index: 2;
+  top: clamp(82px, 12vh, 112px);
+  left: 50%;
+  width: min(34vw, 500px);
+  height: auto;
+  overflow: visible;
+  transform: translateX(-50%);
+  filter: drop-shadow(0 16px 18px rgba(10, 5, 18, 0.28));
+  transform-origin: 50% 42%;
+  animation: shipyard-sunset-depart 5200ms 120ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+}
+
+.shipyard-sunset__vessel-mast {
+  fill: none;
+  stroke: #0a0a14;
+  stroke-linecap: square;
+  stroke-width: 8;
+}
+
+.shipyard-sunset__vessel-bridge,
+.shipyard-sunset__vessel-hull,
+.shipyard-sunset__vessel-keel {
+  fill: #0a0a14;
+}
+
+.shipyard-sunset__vessel-bridge {
+  stroke: #0a0a14;
+  stroke-width: 2;
+}
+
+.shipyard-sunset__vessel-windows {
+  fill: #ffb32f;
+}
+
+.shipyard-sunset__vessel-hawseholes {
+  fill: #ff8a2b;
+}
+
+@keyframes shipyard-sunset-depart {
+  0% { opacity: 0; transform: translateX(-50%) translateY(8px) scale(1.04); }
+  14% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+  64% { opacity: 1; transform: translateX(-50%) translateY(-9px) scale(0.9); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-62px) scale(0.13); }
+}
+
+@keyframes sunset-sun-breathe {
+  0% { opacity: 0.72; transform: scale(0.94); }
+  24% { opacity: 1; transform: scale(1); }
+  100% { opacity: 1; transform: scale(1.02); }
+}
+
+@keyframes sunset-reflection {
+  0%, 100% { opacity: 0.18; transform: scaleX(0.82); }
+  45% { opacity: 0.58; transform: scaleX(1); }
+}
+
+@keyframes sunset-ripple {
+  0% { opacity: 0; stroke-dashoffset: 18; transform: translateY(-3px); }
+  24% { opacity: 0.75; }
+  100% { opacity: 0.36; stroke-dashoffset: 0; transform: translateY(0); }
 }
 
 /* Sail away — a direct ShipYard/boat nod. */
@@ -827,12 +1130,40 @@ onBeforeUnmount(() => {
 .celebration--reduced.celebration--quiet-handoff .celebration__scene { display: block; }
 .celebration--reduced .quiet-handoff__glow,
 .celebration--reduced .quiet-handoff__line { display: none; }
-.celebration--reduced .quiet-handoff__preview-mark { opacity: 1; animation: none; }
+.celebration--reduced .quiet-handoff__receipt { opacity: 1; animation: none; }
 .celebration--reduced .celebration__content,
 .celebration--reduced .celebration__success-mark,
 .celebration--reduced .celebration__success-mark svg { animation: none; }
 .celebration--reduced .celebration__success-mark { transform: none; }
 .celebration--reduced .celebration__success-ring { display: none; }
+
+.celebration__reduced-preview {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  width: min(430px, calc(100vw - 42px));
+  align-items: center;
+  flex-direction: column;
+  padding: 32px;
+  text-align: center;
+}
+
+.celebration__reduced-preview h1 {
+  max-width: 340px;
+  margin: 0;
+  font-size: clamp(21px, 3vw, 28px);
+  font-weight: 650;
+  line-height: 1.12;
+  letter-spacing: -0.026em;
+}
+
+.celebration__reduced-preview p {
+  max-width: 320px;
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
 
 @keyframes celebration-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes celebration-out { from { opacity: 1; } to { opacity: 0; } }
@@ -840,8 +1171,6 @@ onBeforeUnmount(() => {
 @keyframes quiet-receipt-in { from { opacity: 0; transform: translateY(8px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes quiet-glow-in { from { opacity: 0; transform: translate(-50%, -50%) scale(0.9); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
 @keyframes quiet-line-in { from { opacity: 0; transform: scaleX(0.72); } to { opacity: 1; transform: scaleX(1); } }
-@keyframes quiet-mark-in { from { opacity: 0; transform: translate(-50%, -50%) scale(0.78); } 70% { opacity: 1; transform: translate(-50%, -50%) scale(1.04); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
-@keyframes quiet-preview-mark-in { from { opacity: 0; transform: translateY(8px) scale(0.84); } 70% { opacity: 1; transform: translateY(-2px) scale(1.04); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes success-draw { from { opacity: 0; transform: scale(0.4) rotate(-18deg); } to { opacity: 1; transform: scale(1) rotate(0); } }
 @keyframes success-ring { 0% { opacity: 0.55; transform: scale(0.55); } 75%, 100% { opacity: 0; transform: scale(1.28); } }
 @keyframes sail-across { from { transform: translateX(0) translateY(12px) rotate(2deg); } 18% { transform: translateX(25vw) translateY(-5px) rotate(-1deg); } 66% { transform: translateX(75vw) translateY(4px) rotate(1deg); } to { transform: translateX(calc(100vw + 250px)) translateY(-10px) rotate(-2deg); } }

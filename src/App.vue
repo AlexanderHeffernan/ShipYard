@@ -11,10 +11,12 @@ import { useProjects } from './composables/useProjects';
 import { useRunner } from './composables/useRunner';
 import { useShippingCompletion } from './composables/useShippingCompletion';
 import { useUpdates } from './composables/useUpdates';
-import { getCompletionAnimation } from './services/completionAnimation';
+import { getCompletionAnimation, getCompletionAnimationSpeed } from './services/completionAnimation';
 import { deleteWorkItem, inspectWorkItemDeletion } from './services/projects';
 import { isFullScreenCompletionAnimation, type CompletionAnimation } from './types/celebration';
+import type { CompletionAnimationSpeed } from './types/celebration';
 import type { DeleteWorkItemRequest, DeletionPlan, Project, WorkItem } from './types/projects';
+import { workItemTitle } from './utils/workItems';
 
 const sidebarOpen = ref(true);
 const sidebarWidth = ref(288);
@@ -76,7 +78,20 @@ watch(selection, (current) => {
 });
 watch(currentRun, (run) => {
   if (!run || run.kind !== 'ship' || !['succeeded', 'failed', 'cancelled'].includes(run.status)) return;
-  observeShippingRun(run, getCompletionAnimation());
+  const project = projects.value.find((candidate) => candidate.id === run.projectId);
+  const item = project?.workItems.find((candidate) => candidate.id === run.workItemId);
+  const destination = run.shippingAction === 'mergePullRequest' || run.shippingAction === 'directToMain'
+    ? project?.defaultBranch ?? 'the main line'
+    : run.shippingAction === 'createPullRequest' ? 'a pull request' : 'the pull request';
+  observeShippingRun(
+    run,
+    getCompletionAnimation(),
+    getCompletionAnimationSpeed(),
+    {
+      workItemLabel: item ? workItemTitle(item) : run.scriptLabel,
+      destination,
+    },
+  );
   if (settledShippingRunId.value === run.runId) return;
   settledShippingRunId.value = run.runId;
   void rescanProject(run.projectId);
@@ -92,8 +107,8 @@ function openProjectSettings(projectId: string) {
   if (project) openSettings(project);
 }
 
-function previewCompletion(animation: CompletionAnimation) {
-  previewShippingCompletion(animation);
+function previewCompletion(animation: CompletionAnimation, speed: CompletionAnimationSpeed) {
+  previewShippingCompletion(animation, speed);
 }
 
 function closeAppSettings() {

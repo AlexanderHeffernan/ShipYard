@@ -7,9 +7,9 @@ import UpdatesSettingsSection from './UpdatesSettingsSection.vue';
 import ExperimentalSettingsSection from './ExperimentalSettingsSection.vue';
 import { getAgentConfiguration, getGitHubStatus, saveAgentSettings } from '../../services/settings';
 import type { AgentConfiguration, AgentSettings, GitHubStatus } from '../../types/settings';
-import type { CompletionAnimation } from '../../types/celebration';
+import type { CompletionAnimation, CompletionAnimationSpeed } from '../../types/celebration';
 
-const emit = defineEmits<{ close: []; preview: [animation: CompletionAnimation] }>();
+const emit = defineEmits<{ close: []; preview: [animation: CompletionAnimation, speed: CompletionAnimationSpeed] }>();
 const section = ref<'agents' | 'github' | 'updates' | 'experimental'>('agents');
 const agentConfiguration = ref<AgentConfiguration | null>(null);
 const agentDraft = ref<AgentSettings>({ preferredAgent: null });
@@ -21,6 +21,10 @@ const saved = ref(false);
 const error = ref<string | null>(null);
 let refreshFeedbackTimer: number | undefined;
 let saveFeedbackTimer: number | undefined;
+
+function previewCompletion(animation: CompletionAnimation, speed: CompletionAnimationSpeed) {
+  emit('preview', animation, speed);
+}
 
 async function refresh(force = false) {
   loading.value = true;
@@ -93,7 +97,7 @@ onBeforeUnmount(() => {
     </template>
 
     <UpdatesSettingsSection v-if="section === 'updates'" />
-    <ExperimentalSettingsSection v-else-if="section === 'experimental'" @preview="emit('preview', $event)" />
+    <ExperimentalSettingsSection v-else-if="section === 'experimental'" @preview="previewCompletion" />
     <main v-else>
       <div class="section-heading">
         <div>

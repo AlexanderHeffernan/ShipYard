@@ -1,10 +1,11 @@
 export const COMPLETION_ANIMATION_STORAGE_KEY = 'shipyard.completionAnimation';
+export const COMPLETION_ANIMATION_SPEED_STORAGE_KEY = 'shipyard.completionAnimationSpeed';
 
 export const completionAnimationOptions = [
   {
     id: 'quiet-handoff',
     label: 'Quiet handoff',
-    description: 'A gentle fade clears the review surface and leaves a small, on-brand shipped mark.',
+    description: 'A gentle fade clears the review surface and reveals a centered ShipYard receipt.',
     default: true,
     fullScreen: false,
   },
@@ -78,11 +79,28 @@ export const completionAnimationOptions = [
     default: false,
     fullScreen: true,
   },
+  {
+    id: 'shipyard-sunset',
+    label: 'Shipyard sunset',
+    description: 'The front-facing cargo ship leaves the docks and fades into the logo’s sunset.',
+    default: false,
+    fullScreen: true,
+  },
 ] as const;
 
 export type CompletionAnimation = (typeof completionAnimationOptions)[number]['id'];
 
 export const DEFAULT_COMPLETION_ANIMATION: CompletionAnimation = 'quiet-handoff';
+
+export const completionAnimationSpeedOptions = [
+  { id: 'fast', label: 'Fast', multiplier: 0.72 },
+  { id: 'normal', label: 'Normal', multiplier: 1 },
+  { id: 'slow', label: 'Slow', multiplier: 1.38 },
+] as const;
+
+export type CompletionAnimationSpeed = (typeof completionAnimationSpeedOptions)[number]['id'];
+
+export const DEFAULT_COMPLETION_ANIMATION_SPEED: CompletionAnimationSpeed = 'normal';
 
 export function completionAnimationOption(animation: CompletionAnimation) {
   return completionAnimationOptions.find((option) => option.id === animation) ?? completionAnimationOptions[0];
@@ -90,6 +108,18 @@ export function completionAnimationOption(animation: CompletionAnimation) {
 
 export function isFullScreenCompletionAnimation(animation: CompletionAnimation) {
   return completionAnimationOption(animation).fullScreen;
+}
+
+export function isCompletionAnimationSpeed(value: unknown): value is CompletionAnimationSpeed {
+  return completionAnimationSpeedOptions.some((option) => option.id === value);
+}
+
+export function normalizeCompletionAnimationSpeed(value: unknown): CompletionAnimationSpeed {
+  return isCompletionAnimationSpeed(value) ? value : DEFAULT_COMPLETION_ANIMATION_SPEED;
+}
+
+export function completionAnimationSpeedMultiplier(speed: CompletionAnimationSpeed) {
+  return completionAnimationSpeedOptions.find((option) => option.id === speed)?.multiplier ?? 1;
 }
 
 export function isCompletionAnimation(value: unknown): value is CompletionAnimation {
@@ -131,6 +161,30 @@ export function saveCompletionAnimation(
   const target = storage ?? browserStorage();
   try {
     target?.setItem(COMPLETION_ANIMATION_STORAGE_KEY, normalized);
+  } catch {
+    // The in-memory selection still works when storage is unavailable.
+  }
+  return normalized;
+}
+
+export function readCompletionAnimationSpeed(storage?: CompletionAnimationStorage): CompletionAnimationSpeed {
+  const source = storage ?? browserStorage();
+  if (!source) return DEFAULT_COMPLETION_ANIMATION_SPEED;
+  try {
+    return normalizeCompletionAnimationSpeed(source.getItem(COMPLETION_ANIMATION_SPEED_STORAGE_KEY));
+  } catch {
+    return DEFAULT_COMPLETION_ANIMATION_SPEED;
+  }
+}
+
+export function saveCompletionAnimationSpeed(
+  speed: unknown,
+  storage?: CompletionAnimationStorage,
+): CompletionAnimationSpeed {
+  const normalized = normalizeCompletionAnimationSpeed(speed);
+  const target = storage ?? browserStorage();
+  try {
+    target?.setItem(COMPLETION_ANIMATION_SPEED_STORAGE_KEY, normalized);
   } catch {
     // The in-memory selection still works when storage is unavailable.
   }
