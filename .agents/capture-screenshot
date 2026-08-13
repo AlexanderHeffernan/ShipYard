@@ -7,10 +7,6 @@ export DISPLAY="${DISPLAY:-:99}"
 
 output="${1:-.amp/in/artifacts/shipyard-$(date +%Y%m%d-%H%M%S).png}"
 mkdir -p "$(dirname "$output")"
-window="$(xdotool search --onlyvisible --name '^Shipyard$' 2>/dev/null | tail -1 || true)"
-if [[ -z "$window" ]]; then
-  echo "Shipyard is not running on $DISPLAY (run amp orb services ensure)." >&2
-  exit 1
-fi
+window="$(.agents/wait-for-visual-window "${SHIPYARD_VISUAL_TIMEOUT:-300}")"
 import -display "$DISPLAY" -frame -window "$window" "$output"
 printf '%s\n' "$output"
