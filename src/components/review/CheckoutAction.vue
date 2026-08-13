@@ -165,10 +165,12 @@ onBeforeUnmount(() => {
       :disabled="button.disabled"
       :title="button.title"
       :aria-label="button.title"
+      :aria-busy="busy || undefined"
       @click="handleButtonClick"
     >
       <span class="checkout-control__button-content checkout-control__button-content--default" aria-hidden="true">
-        <svg viewBox="0 0 16 16"><path v-if="phase === 'idle'" d="M8 2.75v7.5m0 0L5.25 7.5M8 10.25l2.75-2.75M3.25 10.75v2h9.5v-2" /><path v-else d="M5 5h6v6H5z" /></svg>
+        <svg v-if="phase === 'idle'" viewBox="0 0 16 16"><path d="M8 2.75v7.5m0 0L5.25 7.5M8 10.25l2.75-2.75M3.25 10.75v2h9.5v-2" /></svg>
+        <svg v-else class="checkout-control__spinner" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5" /></svg>
         <span>{{ button.label }}</span>
       </span>
       <span v-if="button.hoverLabel" class="checkout-control__button-content checkout-control__button-content--cancel" aria-hidden="true">
@@ -196,9 +198,11 @@ onBeforeUnmount(() => {
 .checkout-control__button--cancellable:hover .checkout-control__button-content--cancel,
 .checkout-control__button--cancellable:focus-visible .checkout-control__button-content--cancel { display: flex; }
 .checkout-control svg { width: 13px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.35; }
+.checkout-control .checkout-control__spinner { stroke-dasharray: 24 12; animation: checkout-control-spin 700ms linear infinite; }
 .checkout-control__feedback { position: absolute; z-index: 7; top: 25px; right: 0; width: 250px; margin: 4px 0 0; padding: 7px; font-size: 10px; color: var(--danger); background: var(--surface-elevated); border: 1px solid var(--border-strong); border-radius: 6px; box-shadow: var(--shadow-elevated); }
 .checkout-control__feedback p { margin: 0; line-height: 1.35; }
 .checkout-control__feedback button { height: 21px; margin-top: 6px; padding: 0 7px; font-size: 10px; color: var(--text-primary); background: var(--surface-subtle); border-color: var(--border-strong); }
+@keyframes checkout-control-spin { to { transform: rotate(360deg); } }
 @media (max-width: 680px) { .checkout-control button { width: 26px; justify-content: center; padding: 0; } .checkout-control span { display: none; } }
 @media (hover: none) { .checkout-control__button--cancellable .checkout-control__button-content--default { display: none; } .checkout-control__button--cancellable .checkout-control__button-content--cancel { display: flex; } }
 </style>
