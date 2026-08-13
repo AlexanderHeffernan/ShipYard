@@ -85,9 +85,11 @@ fn prepare_with_adapter(
     let resolution_path = base.join("resolutions").join(&operation_id);
     let shipped_commit_path = operation_dir.join("shipped-commit.txt");
     let managed_checkout = matches!(request.action, ShippingAction::MergePullRequest)
-        .then(|| request.pull_request_number.map(|number| {
-            git::managed_pull_request_checkout_path(base, &request.project_id, number)
-        }))
+        .then(|| {
+            request.pull_request_number.map(|number| {
+                git::managed_pull_request_checkout_path(base, &request.project_id, number)
+            })
+        })
         .flatten();
     let script = script(
         &request,
@@ -223,7 +225,9 @@ integrate_target() {{
         repository = shell_text(&request.github_repository),
         resolution = shell(resolution_path),
         primary_checkout = shell(primary_checkout),
-        managed_checkout = managed_checkout.map(shell).unwrap_or_else(|| "''".to_owned()),
+        managed_checkout = managed_checkout
+            .map(shell)
+            .unwrap_or_else(|| "''".to_owned()),
         agent_label = adapter.label(),
         conflict_command = conflict_command,
         checkout_guard = if matches!(

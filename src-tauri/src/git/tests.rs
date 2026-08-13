@@ -1,3 +1,4 @@
+use super::checkout::managed_pull_request_checkout_path;
 use super::{
     delete_work_item, inspect_work_item_deletion, read_work_item_diff, scan_project,
     validate_worktree, work_item::WorkItem, work_status::WorkStatus, worktree_paths,
@@ -138,6 +139,64 @@ fn fresh_clean_linked_worktree_is_working_until_explicitly_shipped() {
 
     run(&root, &["worktree", "remove", linked.to_str().unwrap()]);
     fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn keeps_shipyard_managed_checkouts_out_of_local_work() {
+    let root = committed_repository("managed-checkout");
+    let app_data = root.with_extension("shipyard-data");
+    let initial = scan_project(root.to_str().unwrap()).unwrap();
+    let managed = managed_pull_request_checkout_path(&app_data, &initial.id, 7);
+    let resolution = app_data.join("resolutions/shipping-test");
+    fs::create_dir_all(managed.parent().unwrap()).unwrap();
+    fs::create_dir_all(resolution.parent().unwrap()).unwrap();
+    run(
+        &root,
+        &[
+            "worktree",
+            "add",
+            "--detach",
+            managed.to_str().unwrap(),
+            "main",
+        ],
+    );
+    run(
+        &root,
+        &[
+            "worktree",
+            "add",
+            "--detach",
+            resolution.to_str().unwrap(),
+            "main",
+        ],
+    );
+
+    let project = scan_project(root.to_str().unwrap()).unwrap();
+    assert!(project.work_items.iter().all(|item| {
+        item.worktree_path.as_deref() != managed.to_str()
+            && item.worktree_path.as_deref() != resolution.to_str()
+    }));
+    let paths = worktree_paths(&root).unwrap();
+    assert!(!paths.contains(&managed));
+    assert!(!paths.contains(&resolution));
+    assert!(super::worktree_reader::is_shipyard_managed(&managed));
+    assert!(super::worktree_reader::is_shipyard_managed(&resolution));
+
+    run(
+        &root,
+        &["worktree", "remove", "--force", managed.to_str().unwrap()],
+    );
+    run(
+        &root,
+        &[
+            "worktree",
+            "remove",
+            "--force",
+            resolution.to_str().unwrap(),
+        ],
+    );
+    fs::remove_dir_all(root).unwrap();
+    fs::remove_dir_all(app_data).unwrap();
 }
 
 #[test]

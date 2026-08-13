@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import ShippingCelebration from './components/celebration/ShippingCelebration.vue';
 import AppSettingsModal from './components/settings/AppSettingsModal.vue';
 import WorkItemPanel from './components/review/WorkItemPanel.vue';
 import ProjectSettingsModal from './components/settings/ProjectSettingsModal.vue';
@@ -8,11 +9,15 @@ import ProjectSwitcher from './components/sidebar/ProjectSwitcher.vue';
 import ConfirmationDialog from './components/ui/ConfirmationDialog.vue';
 import { useProjects } from './composables/useProjects';
 import { useNotifications } from './composables/useNotifications';
+import { useRunner } from './composables/useRunner';
+import { useShippingCompletion } from './composables/useShippingCompletion';
 import { useUpdates } from './composables/useUpdates';
 import { useWindowFullscreen } from './composables/useWindowFullscreen';
+import { getSunsetEffectEnabled } from './services/completionAnimation';
 import { deleteWorkItem, inspectWorkItemDeletion } from './services/projects';
 import type { DeleteWorkItemRequest, DeletionPlan, Project, WorkItem } from './types/projects';
 import { titlebarControlsInset } from './utils/titlebar';
+import { workItemTitle } from './utils/workItems';
 
 const sidebarOpen = ref(true);
 const sidebarWidth = ref(288);
@@ -20,6 +25,9 @@ const selectedWorkItemId = ref<string | null>(null);
 const settingsProject = ref<Project | null>(null);
 const settingsSection = ref<'open' | 'run'>('run');
 const appSettingsOpen = ref(false);
+const settledShippingRunId = ref<string | null>(null);
+const shippedLabel = ref<string | null>(null);
+const shippedProject = ref<string | null>(null);
 const notificationsReady = ref(false);
 const deletion = ref<{
   project: Project;
@@ -42,6 +50,12 @@ const {
   updateProjectIdentity,
   disposeProjects,
 } = useProjects();
+const { currentRun } = useRunner();
+const {
+  state: completionState,
+  observeRun: observeShippingRun,
+  dismiss: dismissCompletion,
+} = useShippingCompletion();
 const notifications = useNotifications();
 const { startAutomaticChecks, stopAutomaticChecks } = useUpdates();
 const { isFullscreen, fullscreenStateReady } = useWindowFullscreen();
@@ -52,6 +66,8 @@ const selection = computed(() => {
   }
   return null;
 });
+let completionSwapTimer: number | undefined;
+let standardCompletionTimer: number | undefined;
 
 async function initializeApp() {
   await loadProjects();
@@ -69,6 +85,8 @@ onBeforeUnmount(() => {
   disposeProjects();
   notifications.stopPolling();
   stopAutomaticChecks();
+  window.clearTimeout(completionSwapTimer);
+  window.clearTimeout(standardCompletionTimer);
 });
 watch(projects, (value) => {
   if (notificationsReady.value) void notifications.observeProjects(value);
@@ -76,6 +94,51 @@ watch(projects, (value) => {
 watch(selection, (current) => {
   if (selectedWorkItemId.value && !current) selectedWorkItemId.value = null;
 });
+watch(selectedWorkItemId, (id) => {
+  if (!id) return;
+  shippedLabel.value = null;
+  shippedProject.value = null;
+});
+
+function beginCompletionTransition(label: string, projectName: string, sunsetEffect: boolean) {
+  window.clearTimeout(completionSwapTimer);
+  window.clearTimeout(standardCompletionTimer);
+  completionSwapTimer = window.setTimeout(() => {
+    shippedLabel.value = label;
+    shippedProject.value = projectName;
+    selectedWorkItemId.value = null;
+  }, 420);
+  if (!sunsetEffect) {
+    standardCompletionTimer = window.setTimeout(dismissCompletion, 1050);
+  }
+}
+
+watch(currentRun, (run) => {
+  if (!run || run.kind !== 'ship' || !['succeeded', 'failed', 'cancelled'].includes(run.status)) return;
+  const project = projects.value.find((candidate) => candidate.id === run.projectId);
+  const item = project?.workItems.find((candidate) => candidate.id === run.workItemId);
+  const destination = run.shippingAction === 'mergePullRequest' || run.shippingAction === 'directToMain'
+    ? project?.defaultBranch ?? 'the main line'
+    : run.shippingAction === 'createPullRequest' ? 'a pull request' : 'the pull request';
+  const label = item ? workItemTitle(item) : run.scriptLabel;
+  const sunsetEffect = getSunsetEffectEnabled();
+  if (run.shippingAction !== 'resolvePullRequest') {
+    observeShippingRun(
+      run,
+      sunsetEffect,
+      {
+        workItemLabel: label,
+        destination,
+      },
+    );
+  }
+  if (settledShippingRunId.value === run.runId) return;
+  settledShippingRunId.value = run.runId;
+  if (run.status === 'succeeded' && run.shippingAction !== 'resolvePullRequest') {
+    beginCompletionTransition(label, project?.name ?? 'this project', sunsetEffect);
+  }
+  void rescanProject(run.projectId);
+}, { deep: true });
 
 function openSettings(project: Project, section: 'open' | 'run' = 'run') {
   settingsProject.value = project;
@@ -85,6 +148,10 @@ function openSettings(project: Project, section: 'open' | 'run' = 'run') {
 function openProjectSettings(projectId: string) {
   const project = projects.value.find((candidate) => candidate.id === projectId);
   if (project) openSettings(project);
+}
+
+function closeAppSettings() {
+  appSettingsOpen.value = false;
 }
 
 function message(error: unknown) {
@@ -200,14 +267,25 @@ const deletionConfirmLabel = computed(() => {
       @settings="appSettingsOpen = true"
     />
 
-    <main class="app-content">
-      <WorkItemPanel
-        :project="selection?.project ?? null"
-        :work-item="selection?.workItem ?? null"
-        :sidebar-open="sidebarOpen"
-        :fullscreen="isFullscreen"
-        @settings="openSettings"
-        @refresh="rescanProject"
+    <main class="app-content" :class="{ 'app-content--shipping-completion': completionState.visible }">
+      <div class="app-content__surface">
+        <WorkItemPanel
+          :project="selection?.project ?? null"
+          :work-item="selection?.workItem ?? null"
+          :sidebar-open="sidebarOpen"
+          :fullscreen="isFullscreen"
+          :shipped-label="shippedLabel"
+          :shipped-project="shippedProject"
+          @settings="openSettings"
+          @refresh="rescanProject"
+        />
+      </div>
+
+      <ShippingCelebration
+        v-if="completionState.visible && completionState.completion?.sunsetEffect"
+        :key="completionState.completion.runId"
+        :completion="completionState.completion"
+        @close="dismissCompletion"
       />
     </main>
 
@@ -217,7 +295,7 @@ const deletionConfirmLabel = computed(() => {
       :initial-section="settingsSection"
       @close="settingsProject = null"
     />
-    <AppSettingsModal v-if="appSettingsOpen" @close="appSettingsOpen = false" />
+    <AppSettingsModal v-if="appSettingsOpen" @close="closeAppSettings" />
     <ConfirmationDialog
       v-if="deletion"
       :title="deletionTitle"
@@ -265,6 +343,26 @@ const deletionConfirmLabel = computed(() => {
   min-width: 0;
   overflow: hidden;
   background: var(--surface-content);
+}
+
+.app-content__surface {
+  width: 100%;
+  height: 100%;
+  opacity: 1;
+  filter: blur(0);
+  transition: opacity 420ms cubic-bezier(0.4, 0, 0.2, 1), filter 420ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.app-content--shipping-completion .app-content__surface {
+  opacity: 0;
+  filter: blur(2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-content__surface {
+    filter: none;
+    transition-duration: 160ms;
+  }
 }
 
 .deletion-remote-note {

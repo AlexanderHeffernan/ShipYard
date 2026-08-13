@@ -51,7 +51,7 @@ const statusClass = computed(() => {
         <CheckoutAction v-if="workItem.pullRequest && !workItem.worktreePath" :project="project" :work-item="workItem" @checked-out="emit('refresh')" />
         <OpenAction :project="project" :work-item="workItem" @settings="emit('settings', 'open')" />
         <RunAction v-if="workItem.worktreePath" :project="project" :work-item="workItem" @settings="emit('settings', $event)" />
-        <ShipAction :project="project" :work-item="workItem" @refresh="emit('refresh')" />
+        <ShipAction :project="project" :work-item="workItem" />
       </div>
     </div>
 

@@ -1,12 +1,11 @@
+#[cfg(target_os = "macos")]
+use super::launcher::build_command;
 use super::{
     application_kind::ApplicationKind, delete_application, load_settings,
     open_application_input::OpenApplicationInput, save_application,
     store::validate_application_path,
 };
 use std::{fs, path::PathBuf, time::SystemTime};
-
-#[cfg(target_os = "macos")]
-use super::launcher::build_command;
 
 #[test]
 fn persists_applications_and_default_outside_projects() {
