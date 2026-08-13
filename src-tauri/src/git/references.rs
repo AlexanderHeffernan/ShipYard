@@ -126,3 +126,39 @@ pub(super) fn commit_details(worktree: &Path) -> Result<(String, u64), String> {
         .unwrap_or_default();
     Ok((subject, timestamp))
 }
+
+pub(crate) fn agent_thread_url(root: &Path, item_ref: &str) -> Option<String> {
+    for key in ["Amp-Thread-ID", "Amp-Thread"] {
+        let format = format!("%(trailers:key={key},valueonly,unfold)%x00");
+        let output = command::optional_text(
+            root,
+            &[
+                "log",
+                "--max-count=100",
+                &format!("--format={format}"),
+                item_ref,
+            ],
+        )?;
+        if let Some(url) = output
+            .split('\0')
+            .flat_map(str::lines)
+            .map(str::trim)
+            .find_map(valid_amp_thread_url)
+        {
+            return Some(url);
+        }
+    }
+    None
+}
+
+fn valid_amp_thread_url(value: &str) -> Option<String> {
+    let suffix = value.strip_prefix("https://ampcode.com/threads/")?;
+    if suffix.is_empty()
+        || suffix.contains('/')
+        || suffix.chars().any(char::is_whitespace)
+        || !suffix.starts_with("T-")
+    {
+        return None;
+    }
+    Some(value.to_owned())
+}

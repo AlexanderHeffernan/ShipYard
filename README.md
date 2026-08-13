@@ -20,6 +20,11 @@ Shipyard currently detects and supports:
 
 Choose one preferred coding agent in the global Shipyard Settings modal. Agent use is automatic after selection.
 
+When an Amp thread creates work, Shipyard reads the `Amp-Thread-ID` Git trailer from the work item's
+commit history and adds **Open Amp thread** to the work item's Open menu. This keeps the link with the
+commits rather than depending on local app state. Amp projects also enable the trailer setting and
+`AGENTS.md` explains how agents should preserve it when committing manually.
+
 ## Notifications
 
 Open **Shipyard Settings → Notifications** to opt into macOS system notifications. Both rules are

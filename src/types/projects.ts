@@ -28,6 +28,7 @@ export type WorkItem = {
   branch: string | null;
   worktreePath: string | null;
   headSha: string;
+  agentThreadUrl?: string | null;
   lastCommitSubject: string;
   status: WorkStatus;
   pullRequest: PullRequest | null;
