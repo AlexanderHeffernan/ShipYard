@@ -18,3 +18,19 @@ uses the commit trailer as the durable source of truth and exposes a matching
 
 Only use the URL for the thread that actually performed the work. If there is
 no current Amp thread, leave the trailer out rather than guessing.
+
+## Reviewable changes
+
+When a task changes repository files, make the changes on a feature branch and
+open a GitHub pull request for review rather than leaving them only in the
+working tree or pushing directly to `main`. Before reporting the work complete:
+
+1. Run the relevant validation for the changes.
+2. Commit the changes and include the current `Amp-Thread-ID` trailer.
+3. Push the feature branch.
+4. Open a pull request and include the current Amp thread URL in its description
+   when practical.
+
+Do not merge the pull request unless the user explicitly asks for that action.
+Answer-only tasks and changes the user explicitly requests to keep local do not
+need a pull request.

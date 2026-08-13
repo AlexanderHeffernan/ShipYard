@@ -6,7 +6,7 @@ Shipyard is an opinionated desktop shipping queue for local Git work and GitHub 
 - **Pull Requests** contains open GitHub pull requests, their merge state, and any local work not yet pushed to them.
 - Merged and closed work leaves the queue.
 
-Creating a pull request asks the configured coding agent to write the commit and pull-request metadata, commits local changes, checks compatibility with the latest default branch, pushes the branch, and opens the pull request. If Git finds a semantic merge conflict, Shipyard creates an isolated resolution worktree and asks the agent to resolve it before continuing.
+Creating a pull request asks the configured coding agent to write the commit and pull-request metadata, commits local changes, checks compatibility with the latest default branch, pushes the branch, and opens the pull request. If Git finds a semantic merge conflict, Shipyard creates an isolated resolution worktree and asks the agent to resolve it before continuing. For a conflicting pull request, the Ship menu can resolve and push the conflict fix while leaving the pull request open for review instead of merging immediately.
 
 When more work is added locally after a pull request exists, Shipyard changes the primary action to update or reconcile the pull request. A pull request cannot be merged while its local branch contains uncommitted or unpushed work.
 
