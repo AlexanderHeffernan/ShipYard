@@ -51,15 +51,36 @@ async fn scan_project(path: String) -> Result<git::Project, String> {
 #[tauri::command]
 async fn checkout_pull_request(
     app: tauri::AppHandle,
+    state: tauri::State<'_, git::CheckoutManager>,
+    operation_id: String,
     request: git::CheckoutPullRequestRequest,
 ) -> Result<git::CheckoutPullRequestResult, String> {
-    let data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|error| error.to_string())?;
-    tauri::async_runtime::spawn_blocking(move || git::checkout_pull_request(&data_dir, request))
-        .await
-        .map_err(|error| format!("pull request checkout failed: {error}"))?
+    let project_id = request.project_id.clone();
+    let pull_request_number = request.pull_request_number;
+    let cancellation = state.register(&operation_id, &project_id, pull_request_number)?;
+    let data_dir = app.path().app_data_dir();
+    let data_dir = match data_dir {
+        Ok(data_dir) => data_dir,
+        Err(error) => {
+            state.finish(&operation_id);
+            return Err(error.to_string());
+        }
+    };
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        git::pull_request_with_cancellation(&data_dir, request, Some(&cancellation))
+    })
+    .await
+    .map_err(|error| format!("pull request checkout failed: {error}"));
+    state.finish(&operation_id);
+    result?
+}
+
+#[tauri::command]
+fn cancel_checkout(
+    state: tauri::State<'_, git::CheckoutManager>,
+    operation_id: String,
+) -> Result<(), String> {
+    state.cancel(&operation_id)
 }
 
 #[tauri::command]
@@ -285,6 +306,7 @@ fn resize_run_terminal(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app = tauri::Builder::default()
+        .manage(git::CheckoutManager::default())
         .manage(run::RunManager::default())
         .manage(watch::WatchManager::default())
         .plugin(tauri_plugin_dialog::init())
@@ -297,6 +319,7 @@ pub fn run() {
             save_agent_settings,
             scan_project,
             checkout_pull_request,
+            cancel_checkout,
             get_work_item_diff,
             inspect_work_item_deletion,
             delete_work_item,
@@ -324,6 +347,7 @@ pub fn run() {
         .expect("error while building tauri application");
     app.run(|handle, event| {
         if matches!(event, tauri::RunEvent::ExitRequested { .. }) {
+            handle.state::<git::CheckoutManager>().cancel_all();
             handle.state::<run::RunManager>().terminate_all();
             handle.state::<watch::WatchManager>().stop_all();
         }

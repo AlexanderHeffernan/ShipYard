@@ -2,7 +2,6 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRunner } from '../../composables/useRunner';
 import { useRunScripts } from '../../composables/useRunScripts';
-import { checkoutPullRequest } from '../../services/projects';
 import type { Project, WorkItem } from '../../types/projects';
 import type { RunScript } from '../../types/run';
 
@@ -56,17 +55,7 @@ async function runSelected(script: RunScript) {
     !props.workItem.worktreePath ||
     anotherRunActive.value
   ) return;
-  const pullRequest = props.workItem.pullRequest;
-  const checkout = pullRequest
-    ? await checkoutPullRequest({
-      projectId: props.project.id,
-      projectPath: props.project.path,
-      pullRequestNumber: pullRequest.number,
-      headSha: pullRequest.headSha,
-      headBranch: pullRequest.headBranch,
-    })
-    : { worktreePath: props.workItem.worktreePath };
-  await run(props.project.id, script, checkout.worktreePath);
+  await run(props.project.id, script, props.workItem.worktreePath);
 }
 
 function closeMenu(event: PointerEvent) {
