@@ -1,7 +1,7 @@
 use super::{
-    delete_work_item, inspect_work_item_deletion, read_work_item_diff, scan_project,
-    validate_worktree, work_item::WorkItem, work_status::WorkStatus, worktree_paths,
-    DeleteWorkItemRequest, Project, WorkItemDiffRequest,
+    delete_work_item, inspect_work_item_deletion, read_work_item_commits, read_work_item_diff,
+    scan_project, validate_worktree, work_item::WorkItem, work_status::WorkStatus, worktree_paths,
+    DeleteWorkItemRequest, Project, WorkItemCommitsRequest, WorkItemDiffRequest,
 };
 use std::{fs, path::Path, path::PathBuf, process::Command, time::SystemTime};
 
@@ -529,6 +529,127 @@ fn reads_a_local_branch_against_the_fetched_remote_base() {
     fs::remove_dir_all(remote).unwrap();
 }
 
+#[test]
+fn reads_local_commit_history_with_metadata_and_stats() {
+    let root = committed_repository("commits-local");
+    run(&root, &["switch", "-c", "feature/commits"]);
+    fs::write(root.join("first.txt"), "first\n").unwrap();
+    run(&root, &["add", "first.txt"]);
+    run(
+        &root,
+        &["commit", "-m", "Add first commit", "-m", "Explain the first change"],
+    );
+    fs::write(root.join("second.txt"), "second\n").unwrap();
+    run(&root, &["add", "second.txt"]);
+    run(&root, &["commit", "-m", "Add second commit"]);
+
+    let project = scan_project(root.to_str().unwrap()).unwrap();
+    let item = project
+        .work_items
+        .iter()
+        .find(|item| item.branch.as_deref() == Some("feature/commits"))
+        .unwrap();
+    let history = read_work_item_commits(commit_request(&project, item)).unwrap();
+
+    assert_eq!(history.source, "local");
+    assert_eq!(history.comparison_label.as_deref(), Some("main"));
+    assert_eq!(history.total, 2);
+    assert_eq!(history.commits.len(), 2);
+    assert_eq!(history.commits[0].subject, "Add second commit");
+    assert_eq!(history.commits[0].short_sha.len(), 7);
+    assert_eq!(history.commits[0].changed_files, 1);
+    assert_eq!(history.commits[0].additions, 1);
+    assert_eq!(history.commits[0].verification, "unsigned");
+    assert!(history.commits[1].body.starts_with("Explain the first change"));
+
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn reads_remote_pull_request_commit_history_without_a_checkout() {
+    let root = committed_repository("commits-remote");
+    let remote = root.with_extension("commits-remote.git");
+    let review = root.with_extension("commits-review");
+    run(&root, &["init", "--bare", remote.to_str().unwrap()]);
+    run(
+        &root,
+        &["remote", "add", "origin", remote.to_str().unwrap()],
+    );
+    run(&root, &["push", "-u", "origin", "main"]);
+    run(&root, &["switch", "-c", "feature/remote-commits"]);
+    fs::write(root.join("remote-commit.txt"), "remote\n").unwrap();
+    run(&root, &["add", "remote-commit.txt"]);
+    run(
+        &root,
+        &["commit", "-m", "Add remote commit", "-m", "Remote review body"],
+    );
+    let head = text(&root, &["rev-parse", "HEAD"]);
+    run(&root, &["push", "origin", "HEAD:refs/pull/9/head"]);
+
+    fs::create_dir_all(&review).unwrap();
+    run(&review, &["init"]);
+    run(
+        &review,
+        &["remote", "add", "origin", remote.to_str().unwrap()],
+    );
+    run(
+        &review,
+        &[
+            "fetch",
+            "origin",
+            "refs/heads/main:refs/remotes/origin/main",
+        ],
+    );
+    run(
+        &review,
+        &["switch", "--create", "main", "refs/remotes/origin/main"],
+    );
+    let project = scan_project(review.to_str().unwrap()).unwrap();
+    let history = read_work_item_commits(WorkItemCommitsRequest {
+        project_path: project.path.clone(),
+        project_id: project.id.clone(),
+        branch: None,
+        worktree_path: None,
+        head_sha: head.clone(),
+        default_branch: Some("main".to_owned()),
+        pull_request_number: Some(9),
+        pull_request_base_branch: Some("main".to_owned()),
+        pull_request_head_sha: Some(head),
+    })
+    .unwrap();
+
+    assert_eq!(history.source, "pullRequest");
+    assert_eq!(history.comparison_label.as_deref(), Some("main"));
+    assert_eq!(history.total, 1);
+    assert_eq!(history.commits[0].subject, "Add remote commit");
+    assert!(history.commits[0].body.starts_with("Remote review body"));
+
+    fs::remove_dir_all(root).unwrap();
+    fs::remove_dir_all(remote).unwrap();
+    fs::remove_dir_all(review).unwrap();
+}
+
+#[test]
+fn returns_an_empty_history_for_unborn_local_work() {
+    let root = temporary_repository("commits-unborn");
+    run(&root, &["init", "-b", "main"]);
+    fs::write(root.join("in-progress.txt"), "not committed\n").unwrap();
+    let project = scan_project(root.to_str().unwrap()).unwrap();
+    let item = project
+        .work_items
+        .iter()
+        .find(|item| item.branch.as_deref() == Some("main"))
+        .unwrap();
+    let history = read_work_item_commits(commit_request(&project, item)).unwrap();
+
+    assert_eq!(history.source, "local");
+    assert_eq!(history.total, 0);
+    assert!(history.commits.is_empty());
+    assert!(history.head_sha.is_none());
+
+    fs::remove_dir_all(root).unwrap();
+}
+
 fn assert_branch_status(root: &Path, branch: &str, expected: WorkStatus) {
     let project = scan(root.to_str().unwrap()).unwrap();
     let item = project
@@ -568,6 +689,29 @@ fn deletion_request(project: &Project, item: &WorkItem) -> DeleteWorkItemRequest
 
 fn diff_request(project: &Project, item: &WorkItem) -> WorkItemDiffRequest {
     WorkItemDiffRequest {
+        project_path: project.path.clone(),
+        project_id: project.id.clone(),
+        branch: item.branch.clone(),
+        worktree_path: item.worktree_path.clone(),
+        head_sha: item.head_sha.clone(),
+        default_branch: project.default_branch.clone(),
+        pull_request_number: item
+            .pull_request
+            .as_ref()
+            .map(|pull_request| pull_request.number),
+        pull_request_base_branch: item
+            .pull_request
+            .as_ref()
+            .map(|pull_request| pull_request.base_branch.clone()),
+        pull_request_head_sha: item
+            .pull_request
+            .as_ref()
+            .map(|pull_request| pull_request.head_sha.clone()),
+    }
+}
+
+fn commit_request(project: &Project, item: &WorkItem) -> WorkItemCommitsRequest {
+    WorkItemCommitsRequest {
         project_path: project.path.clone(),
         project_id: project.id.clone(),
         branch: item.branch.clone(),

@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { open } from '@tauri-apps/plugin-dialog';
+import type { WorkItemCommitHistory, WorkItemCommitsRequest } from '../types/commits';
 import type {
   CheckoutPullRequestRequest,
   DeleteWorkItemRequest,
@@ -31,6 +32,10 @@ export function checkoutPullRequest(request: CheckoutPullRequestRequest) {
 
 export function getWorkItemDiff(request: WorkItemDiffRequest) {
   return invoke<WorkItemDiff>('get_work_item_diff', { request });
+}
+
+export function getWorkItemCommits(request: WorkItemCommitsRequest) {
+  return invoke<WorkItemCommitHistory>('get_work_item_commits', { request });
 }
 
 export function inspectWorkItemDeletion(request: DeleteWorkItemRequest) {

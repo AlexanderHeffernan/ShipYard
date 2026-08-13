@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import type { Project, WorkItem } from '../../types/projects';
+import WorkItemCommits from './WorkItemCommits.vue';
 import RunConsole from './RunConsole.vue';
 import WorkItemChanges from './WorkItemChanges.vue';
 import WorkItemHeader from './WorkItemHeader.vue';
@@ -20,6 +21,22 @@ const emit = defineEmits<{
 type ReviewTab = 'changes' | 'commits';
 
 const activeTab = ref<ReviewTab>('changes');
+
+function selectTab(tab: ReviewTab) {
+  activeTab.value = tab;
+}
+
+function handleTabKey(event: KeyboardEvent) {
+  if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight' && event.key !== 'Home' && event.key !== 'End') return;
+  event.preventDefault();
+  const nextTab = event.key === 'Home' || (event.key === 'ArrowLeft' && activeTab.value === 'commits')
+    ? 'changes'
+    : event.key === 'End' || (event.key === 'ArrowRight' && activeTab.value === 'changes')
+      ? 'commits'
+      : activeTab.value;
+  selectTab(nextTab);
+  document.querySelector<HTMLButtonElement>(`[data-review-tab="${nextTab}"]`)?.focus();
+}
 </script>
 
 <template>
@@ -33,39 +50,46 @@ const activeTab = ref<ReviewTab>('changes');
       @refresh="emit('refresh', project.id)"
     />
 
-    <nav class="review-tabs" aria-label="Work item details">
+    <nav class="review-tabs" role="tablist" aria-label="Work item details" @keydown="handleTabKey">
       <button
+        id="work-item-tab-changes"
+        data-review-tab="changes"
+        role="tab"
         type="button"
         :class="{ 'review-tabs__tab--active': activeTab === 'changes' }"
-        :aria-current="activeTab === 'changes' ? 'page' : undefined"
-        @click="activeTab = 'changes'"
+        :aria-selected="activeTab === 'changes'"
+        :tabindex="activeTab === 'changes' ? 0 : -1"
+        @click="selectTab('changes')"
       >
         Changes
         <span>{{ workItem.changedFiles }}</span>
       </button>
       <button
+        id="work-item-tab-commits"
+        data-review-tab="commits"
+        role="tab"
         type="button"
         :class="{ 'review-tabs__tab--active': activeTab === 'commits' }"
-        :aria-current="activeTab === 'commits' ? 'page' : undefined"
-        @click="activeTab = 'commits'"
+        :aria-selected="activeTab === 'commits'"
+        :tabindex="activeTab === 'commits' ? 0 : -1"
+        @click="selectTab('commits')"
       >
         Commits
       </button>
     </nav>
 
-    <div class="work-panel__body">
+    <div class="work-panel__body" role="tabpanel" :aria-labelledby="`work-item-tab-${activeTab}`" tabindex="0">
       <WorkItemChanges
         v-if="activeTab === 'changes'"
         :project="project"
         :work-item="workItem"
       />
-      <div v-else class="work-panel__placeholder">
-        <svg viewBox="0 0 20 20" aria-hidden="true">
-          <path d="M10 5.25v4.75l3 1.75M3.75 5.5v-2.25M3.75 3.25H6m-2.1 2.4A7 7 0 1 1 3 8.75" />
-        </svg>
-        <strong>Commits</strong>
-        <span>The commit history will appear here.</span>
-      </div>
+      <WorkItemCommits
+        v-else
+        :project="project"
+        :work-item="workItem"
+        @show-changes="activeTab = 'changes'"
+      />
     </div>
     <RunConsole :project-id="project.id" />
   </section>
