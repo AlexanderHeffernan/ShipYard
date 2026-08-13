@@ -6,7 +6,7 @@ Shipyard is an opinionated desktop shipping queue for local Git work and GitHub 
 - **Pull Requests** contains open GitHub pull requests, their merge state, and any local work not yet pushed to them.
 - Merged and closed work leaves the queue.
 
-Creating a pull request asks the configured coding agent to write the commit and pull-request metadata, commits local changes, checks compatibility with the latest default branch, pushes the branch, and opens the pull request. If Git finds a semantic merge conflict, Shipyard creates an isolated resolution worktree and asks the agent to resolve it before continuing.
+Creating a pull request asks the configured coding agent to write the commit and pull-request metadata, commits local changes, checks compatibility with the latest default branch, pushes the branch, and opens the pull request. If Git finds a semantic merge conflict, Shipyard creates an isolated resolution worktree and asks the agent to resolve it before continuing. For a conflicting pull request, the Ship menu can resolve and push the conflict fix while leaving the pull request open for review instead of merging immediately.
 
 When more work is added locally after a pull request exists, Shipyard changes the primary action to update or reconcile the pull request. A pull request cannot be merged while its local branch contains uncommitted or unpushed work.
 
@@ -19,6 +19,36 @@ Shipyard currently detects and supports:
 - GitHub through an authenticated [GitHub CLI](https://cli.github.com/) installation
 
 Choose one preferred coding agent in the global Shipyard Settings modal. Agent use is automatic after selection.
+
+When an Amp thread creates work, Shipyard reads the `Amp-Thread-ID` Git trailer from the work item's
+commit history and adds **Open Amp thread** to the work item's Open menu. This keeps the link with the
+commits rather than depending on local app state. Amp projects also enable the trailer setting and
+`AGENTS.md` explains how agents should preserve it when committing manually.
+
+## Notifications
+
+Open **Shipyard Settings → Notifications** to opt into macOS system notifications. Both rules are
+off by default and are independent:
+
+- **New pull requests** alerts once when a pull request first appears in a project.
+- **Pull request updates** alerts when the head commit, draft state, review/check state, merge
+  state, or target branch changes. Repeated polls of the same revision do not alert.
+
+The first scan establishes a quiet baseline. A material update is a change to the head SHA, draft
+flag, normalized review/check attention state, merge state, or base branch; changes within the same
+state (for example, another poll of a still-failing check) are not separate events. Shipyard
+persists notification settings in `notifications/settings.json` and observed project/PR identity,
+material revision, presence, and last event state in `notifications/observed.json` under the app data
+directory. A PR that disappears from a poll and later reappears is treated as a new appearance.
+Transient project/GitHub scan failures do not count as disappearance, so recovery does not create a
+false "new" event.
+Notification payloads contain only a sanitized project name and pull-request number; titles,
+branches, paths, commit messages, and review text are not included.
+
+Enabling either rule requests macOS notification permission. If permission is denied, the settings
+screen links to **System Settings → Notifications → Shipyard** and keeps the rule disabled until
+permission is available. New installs and missing settings fields default to off; a legacy explicit
+global `enabled: true` choice is migrated to both independently editable rules.
 
 ## Development
 
@@ -84,3 +114,10 @@ zoomed, pannable view and **Fit screen** to see the whole app. Agents can automa
 Both capture commands print the generated path under `.amp/in/artifacts/`. This Linux environment
 can validate the shared Tauri UI and backend behavior, but actions explicitly implemented only for
 macOS still require validation on macOS.
+
+## Project identity customization
+
+Open the **Projects** dropdown and click a project’s identity icon to customize its generated color
+or select an image. Changes are saved per project in the local account storage. The image picker
+accepts PNG, JPG, GIF, WebP, and AVIF files up to 2 MB; invalid files are rejected inline. Removing
+a project also removes its saved identity customization.

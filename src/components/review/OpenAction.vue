@@ -57,6 +57,18 @@ async function openPullRequest() {
   }
 }
 
+async function openAgentThread() {
+  const url = props.workItem.agentThreadUrl;
+  if (!url) return;
+  error.value = null;
+  try {
+    await openUrl(url);
+    menuOpen.value = false;
+  } catch (openError) {
+    error.value = String(openError);
+  }
+}
+
 function closeMenu(event: PointerEvent) {
   if (!root.value?.contains(event.target as Node)) menuOpen.value = false;
 }
@@ -94,6 +106,10 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeMenu));
       <button v-if="workItem.pullRequest" type="button" @click="openPullRequest">
         <span>Open PR on GitHub</span>
         <small>#{{ workItem.pullRequest.number }}</small>
+      </button>
+      <button v-if="workItem.agentThreadUrl" type="button" @click="openAgentThread">
+        <span>Open Amp thread</span>
+        <small>Amp</small>
       </button>
       <p v-if="!checkoutPath" class="open-menu__notice">
         This branch needs to be checked out before it can be opened.

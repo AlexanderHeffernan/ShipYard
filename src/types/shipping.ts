@@ -1,1 +1,1 @@
-export type ShippingAction = 'createPullRequest' | 'updatePullRequest' | 'mergePullRequest' | 'directToMain';
+export type ShippingAction = 'createPullRequest' | 'updatePullRequest' | 'mergePullRequest' | 'resolvePullRequest' | 'directToMain';

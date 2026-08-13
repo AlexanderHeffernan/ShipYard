@@ -6,20 +6,17 @@ import {
   startProjectWatch,
   stopProjectWatch,
 } from '../services/projects';
-import type { Project, ScannedProject } from '../types/projects';
+import type { Project, ProjectCustomization, ScannedProject } from '../types/projects';
+import {
+  projectDefaultColor,
+  readProjectIdentityStore,
+  removeProjectCustomization,
+  resolveProjectCustomization,
+  saveProjectIdentityStore,
+  setProjectCustomization,
+} from '../utils/projectIdentity';
 
 const STORAGE_KEY = 'shipyard.projectPaths';
-const PROJECT_COLORS = ['#8b5cf6', '#3395ff', '#29c76f', '#ffbd2e', '#ff4f8b', '#9699a1'];
-
-function projectColor(id: string) {
-  let hash = 0;
-  for (const character of id) hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
-  return PROJECT_COLORS[hash % PROJECT_COLORS.length];
-}
-
-function withColor(project: ScannedProject): Project {
-  return { ...project, color: projectColor(project.id) };
-}
 
 function readSavedPaths() {
   try {
@@ -47,10 +44,26 @@ export function useProjects() {
   const refreshing = new Set<string>();
   const queued = new Set<string>();
   const versions = new Map<string, number>();
+  let identityStore = readProjectIdentityStore();
   let stopListening: (() => void) | null = null;
 
+  function withIdentity(project: ScannedProject): Project {
+    const resolved = resolveProjectCustomization(identityStore, project.id, project.path);
+    if (resolved.migrated) {
+      identityStore = resolved.store;
+      saveProjectIdentityStore(identityStore);
+    }
+    const color = resolved.customization.color ?? projectDefaultColor(project.id);
+    return {
+      ...project,
+      color,
+      colorOverride: resolved.customization.color,
+      image: resolved.customization.image,
+    };
+  }
+
   function refreshAllProjects() {
-    for (const project of projects.value) void refreshProject(project.id);
+    return Promise.all(projects.value.map((project) => refreshProject(project.id))).then(() => undefined);
   }
 
   async function refreshProject(id: string) {
@@ -65,7 +78,7 @@ export function useProjects() {
       if (!current) break;
       const version = versions.get(id) ?? 0;
       try {
-        const updated = withColor(await scanProject(current.path));
+        const updated = withIdentity(await scanProject(current.path));
         const index = projects.value.findIndex((project) => project.id === id);
         if (index !== -1 && updated.id === id && versions.get(id) === version) {
           projects.value[index] = updated;
@@ -100,7 +113,7 @@ export function useProjects() {
       .filter(
         (result): result is PromiseFulfilledResult<ScannedProject> => result.status === 'fulfilled',
       )
-      .map((result) => withColor(result.value));
+      .map((result) => withIdentity(result.value));
     for (const project of projects.value) versions.set(project.id, 0);
     await Promise.all(projects.value.map(watchProject));
 
@@ -118,7 +131,7 @@ export function useProjects() {
     loading.value = true;
     error.value = null;
     try {
-      const project = withColor(await scanProject(path));
+      const project = withIdentity(await scanProject(path));
       const existingIndex = projects.value.findIndex((existing) => existing.id === project.id);
       versions.set(project.id, (versions.get(project.id) ?? 0) + 1);
       if (existingIndex === -1) {
@@ -140,11 +153,43 @@ export function useProjects() {
   }
 
   function removeProject(id: string) {
+    const removed = projects.value.find((project) => project.id === id);
     projects.value = projects.value.filter((project) => project.id !== id);
     versions.set(id, (versions.get(id) ?? 0) + 1);
     queued.delete(id);
     void stopProjectWatch(id);
+    identityStore = removeProjectCustomization(identityStore, id, removed?.path);
+    saveProjectIdentityStore(identityStore);
     savePaths(projects.value);
+  }
+
+  function updateProjectIdentity(id: string, patch: Partial<ProjectCustomization>) {
+    const current = projects.value.find((project) => project.id === id);
+    if (!current) return false;
+
+    const customization: ProjectCustomization = {
+      color: patch.color === undefined ? current.colorOverride : patch.color,
+      image: patch.image === undefined ? current.image : patch.image,
+    };
+    const nextStore = setProjectCustomization(identityStore, id, current.path, customization);
+    if (!saveProjectIdentityStore(nextStore)) {
+      error.value = 'Project identity could not be saved. Try a smaller image or check available storage.';
+      return false;
+    }
+
+    identityStore = nextStore;
+    projects.value = projects.value.map((project) => {
+      if (project.id !== id) return project;
+      const color = customization.color ?? projectDefaultColor(project.id);
+      return {
+        ...project,
+        color,
+        colorOverride: customization.color,
+        image: customization.image,
+      };
+    });
+    error.value = null;
+    return true;
   }
 
   function disposeProjects() {
@@ -159,9 +204,11 @@ export function useProjects() {
     loading,
     error,
     loadProjects,
+    refreshAllProjects,
     addProject,
     rescanProject,
     removeProject,
+    updateProjectIdentity,
     disposeProjects,
   };
 }

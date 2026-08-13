@@ -53,6 +53,39 @@ fn classifies_ready_and_shipped_branches() {
 }
 
 #[test]
+fn exposes_the_amp_thread_from_a_recent_commit_trailer() {
+    let root = committed_repository("amp-thread-trailer");
+    run(&root, &["switch", "-c", "feature/amp-thread"]);
+    fs::write(root.join("feature.txt"), "Amp-backed feature\n").unwrap();
+    run(&root, &["add", "feature.txt"]);
+    run(
+        &root,
+        &[
+            "-c",
+            "core.hooksPath=/dev/null",
+            "commit",
+            "-m",
+            "Add Amp-backed feature",
+            "-m",
+            "Amp-Thread-ID: https://ampcode.com/threads/T-test-thread",
+        ],
+    );
+
+    let project = scan_project(root.to_str().unwrap()).unwrap();
+    let item = project
+        .work_items
+        .iter()
+        .find(|item| item.branch.as_deref() == Some("feature/amp-thread"))
+        .unwrap();
+
+    assert_eq!(
+        item.agent_thread_url.as_deref(),
+        Some("https://ampcode.com/threads/T-test-thread")
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn associates_a_dirty_linked_worktree_with_its_branch() {
     let root = committed_repository("worktree");
     let linked = root.with_extension("linked-worktree");

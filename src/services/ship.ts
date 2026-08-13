@@ -10,7 +10,7 @@ export function shipWork(project: Project, item: WorkItem, action: ShippingActio
       projectId: project.id,
       workItemId: item.id,
       sourcePath: item.worktreePath ?? project.path,
-      sourceBranch: item.branch,
+      sourceBranch: item.branch ?? item.pullRequest?.headBranch ?? null,
       defaultBranch: project.defaultBranch,
       githubRepository: project.githubRepository,
       action,

@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { Plus, Settings, X } from '@lucide/vue';
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import AppButton from '../ui/AppButton.vue';
-import type { Project } from '../../types/projects';
+import ProjectIcon from '../ui/ProjectIcon.vue';
+import ProjectIdentityPopover from './ProjectIdentityPopover.vue';
+import type { Project, ProjectCustomization } from '../../types/projects';
 
 const props = defineProps<{
   projects: Project[];
@@ -14,25 +16,78 @@ const emit = defineEmits<{
   add: [];
   remove: [id: string];
   settings: [id: string];
+  identity: [id: string, patch: Partial<ProjectCustomization>];
 }>();
 
 const root = ref<HTMLElement>();
+const trigger = ref<HTMLButtonElement>();
 const open = ref(false);
+const identityProjectId = ref<string | null>(null);
 const projectLabel = computed(
   () => `${props.projects.length} Project${props.projects.length === 1 ? '' : 's'}`,
 );
 
 function closeMenuOnOutsideClick(event: PointerEvent) {
-  if (!root.value?.contains(event.target as Node)) open.value = false;
+  if (!root.value?.contains(event.target as Node)) {
+    open.value = false;
+    identityProjectId.value = null;
+  }
 }
 
 function closeMenuOnEscape(event: KeyboardEvent) {
-  if (event.key === 'Escape') open.value = false;
+  if (event.key !== 'Escape') return;
+  if (identityProjectId.value) {
+    closeIdentity(true);
+    event.preventDefault();
+    return;
+  }
+  if (open.value) {
+    open.value = false;
+    trigger.value?.focus();
+    event.preventDefault();
+  }
+}
+
+function toggleMenu() {
+  open.value = !open.value;
+  if (!open.value) identityProjectId.value = null;
+}
+
+function identityPopoverId(project: Project) {
+  return `project-identity-${project.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+}
+
+function focusIdentityTrigger(projectId: string) {
+  nextTick(() => {
+    const buttons = root.value?.querySelectorAll<HTMLButtonElement>('[data-project-identity-trigger]');
+    const button = [...(buttons ?? [])].find((candidate) => candidate.dataset.projectIdentityTrigger === projectId);
+    button?.focus();
+  });
+}
+
+function toggleIdentity(projectId: string) {
+  identityProjectId.value = identityProjectId.value === projectId ? null : projectId;
+}
+
+function closeIdentity(returnFocus = true) {
+  const projectId = identityProjectId.value;
+  identityProjectId.value = null;
+  if (returnFocus && projectId) focusIdentityTrigger(projectId);
 }
 
 function openSettings(projectId: string) {
+  closeIdentity(false);
   open.value = false;
   emit('settings', projectId);
+}
+
+function removeProject(projectId: string) {
+  if (identityProjectId.value === projectId) closeIdentity(false);
+  emit('remove', projectId);
+}
+
+function updateIdentity(projectId: string, patch: Partial<ProjectCustomization>) {
+  emit('identity', projectId, patch);
 }
 
 onMounted(() => {
@@ -49,11 +104,12 @@ onBeforeUnmount(() => {
 <template>
   <div ref="root" class="project-switcher">
     <button
+      ref="trigger"
       class="project-switcher__trigger"
       type="button"
       aria-controls="project-menu"
       :aria-expanded="open"
-      @click="open = !open"
+      @click="toggleMenu"
     >
       <span>{{ projectLabel }}</span>
       <svg viewBox="0 0 16 16" aria-hidden="true">
@@ -70,11 +126,29 @@ onBeforeUnmount(() => {
             v-for="project in projects"
             :key="project.id"
             class="project-menu__row"
+            :class="{ 'project-menu__row--identity-open': identityProjectId === project.id }"
           >
+            <button
+              class="project-menu__identity-trigger"
+              type="button"
+              :data-project-identity-trigger="project.id"
+              :aria-label="`Customize ${project.name} icon`"
+              :aria-expanded="identityProjectId === project.id"
+              :aria-controls="identityPopoverId(project)"
+              @click="toggleIdentity(project.id)"
+            >
+              <ProjectIcon :color="project.color" :image="project.image" size="medium" />
+            </button>
             <div class="project-menu__project">
-              <span class="project-dot" :style="{ background: project.color }"></span>
-              <span>{{ project.name }}</span>
+              <span class="project-menu__name">{{ project.name }}</span>
             </div>
+
+            <ProjectIdentityPopover
+              v-if="identityProjectId === project.id"
+              :project="project"
+              @color="updateIdentity(project.id, { color: $event })"
+              @image="updateIdentity(project.id, { image: $event })"
+            />
 
             <AppButton
               class="project-menu__settings"
@@ -95,12 +169,14 @@ onBeforeUnmount(() => {
               type="button"
               :aria-label="`Close ${project.name}`"
               :title="`Close ${project.name}`"
-              @click="emit('remove', project.id)"
+              @click="removeProject(project.id)"
             >
               <X aria-hidden="true" />
             </AppButton>
           </div>
         </div>
+
+        <p v-if="projects.length === 0" class="project-menu__empty">Add a Git project to start building your queue.</p>
 
         <AppButton
           class="project-menu__add"
@@ -164,7 +240,7 @@ onBeforeUnmount(() => {
   top: 30px;
   left: 0;
   width: 244px;
-  overflow: hidden;
+  overflow: visible;
   color: var(--text-primary);
   background: var(--surface-elevated);
   border: 1px solid var(--border-strong);
@@ -187,37 +263,63 @@ onBeforeUnmount(() => {
 }
 
 .project-menu__row {
+  position: relative;
   display: flex;
   align-items: center;
   height: 37px;
   border-radius: 6px;
 }
 
+.project-menu__row:hover,
+.project-menu__row--identity-open {
+  background: var(--surface-hover);
+}
+
+.project-menu__row--identity-open {
+  z-index: 2;
+}
+
+.project-menu__identity-trigger {
+  display: grid;
+  flex: 0 0 auto;
+  width: 35px;
+  height: 35px;
+  padding: 0;
+  place-items: center;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+}
+
+.project-menu__identity-trigger:hover {
+  background: rgba(255, 255, 255, 0.075);
+}
+
 .project-menu__project {
   display: flex;
   flex: 1;
   align-items: center;
-  gap: 11px;
   min-width: 0;
   height: 100%;
-  padding: 0 9px;
+  padding: 0 4px;
   overflow: hidden;
   font-size: 13px;
   color: inherit;
 }
 
-.project-menu__project span:last-child {
+.project-menu__name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.project-dot {
-  flex: 0 0 auto;
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.24);
+.project-menu__empty {
+  margin: 0;
+  padding: 7px 15px 13px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-secondary);
 }
 
 .project-menu__close,
@@ -252,6 +354,7 @@ onBeforeUnmount(() => {
   background: rgba(255, 255, 255, 0.02);
   border: 0;
   border-top: 1px solid var(--border-subtle);
+  border-radius: 0 0 9px 9px;
 }
 
 .project-menu__add:hover {

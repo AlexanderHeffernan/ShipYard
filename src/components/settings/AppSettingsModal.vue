@@ -1,15 +1,16 @@
 <script setup lang="ts">
-import { Bot, Check, Download, FlaskConical, GitPullRequest, RefreshCw } from '@lucide/vue';
+import { Bell, Bot, Check, Download, FlaskConical, GitPullRequest, RefreshCw } from '@lucide/vue';
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 import AppButton from '../ui/AppButton.vue';
 import SettingsModal from './SettingsModal.vue';
+import NotificationsSettingsSection from './NotificationsSettingsSection.vue';
 import UpdatesSettingsSection from './UpdatesSettingsSection.vue';
 import ExperimentalSettingsSection from './ExperimentalSettingsSection.vue';
 import { getAgentConfiguration, getGitHubStatus, saveAgentSettings } from '../../services/settings';
 import type { AgentConfiguration, AgentSettings, GitHubStatus } from '../../types/settings';
 
 const emit = defineEmits<{ close: [] }>();
-const section = ref<'agents' | 'github' | 'updates' | 'experimental'>('agents');
+const section = ref<'agents' | 'github' | 'notifications' | 'updates' | 'experimental'>('agents');
 const agentConfiguration = ref<AgentConfiguration | null>(null);
 const agentDraft = ref<AgentSettings>({ preferredAgent: null });
 const github = ref<GitHubStatus | null>(null);
@@ -89,10 +90,14 @@ onBeforeUnmount(() => {
       <button :aria-current="section === 'experimental' ? 'page' : undefined" type="button" @click="section = 'experimental'">
         <FlaskConical aria-hidden="true" /> Experimental
       </button>
+      <button :aria-current="section === 'notifications' ? 'page' : undefined" type="button" @click="section = 'notifications'">
+        <Bell aria-hidden="true" /> Notifications
+      </button>
     </template>
 
     <UpdatesSettingsSection v-if="section === 'updates'" />
     <ExperimentalSettingsSection v-else-if="section === 'experimental'" />
+    <NotificationsSettingsSection v-else-if="section === 'notifications'" />
     <main v-else>
       <div class="section-heading">
         <div>

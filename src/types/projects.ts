@@ -7,6 +7,7 @@ export type PullRequest = {
   draft: boolean;
   mergeable: boolean | null;
   mergeState: 'ready' | 'checksPending' | 'checksFailed' | 'reviewRequired' | 'conflicting' | 'draft';
+  attentionState: string;
   headBranch: string;
   baseBranch: string;
   headSha: string;
@@ -27,6 +28,7 @@ export type WorkItem = {
   branch: string | null;
   worktreePath: string | null;
   headSha: string;
+  agentThreadUrl?: string | null;
   lastCommitSubject: string;
   status: WorkStatus;
   pullRequest: PullRequest | null;
@@ -49,8 +51,24 @@ export type ScannedProject = {
   githubError: string | null;
 };
 
+export type ProjectImage = {
+  dataUrl: string;
+  name: string;
+  type: string;
+  size: number;
+  width: number;
+  height: number;
+};
+
+export type ProjectCustomization = {
+  color: string | null;
+  image: ProjectImage | null;
+};
+
 export type Project = ScannedProject & {
   color: string;
+  colorOverride: string | null;
+  image: ProjectImage | null;
 };
 
 export type WorkItemDiffRequest = {

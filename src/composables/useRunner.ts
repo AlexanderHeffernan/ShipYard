@@ -86,6 +86,7 @@ export function useRunner() {
         createPullRequest: 'Creating pull request',
         updatePullRequest: 'Updating pull request',
         mergePullRequest: 'Merging pull request',
+        resolvePullRequest: 'Resolving pull request',
         directToMain: 'Shipping directly to main',
       };
       currentRun.value = {

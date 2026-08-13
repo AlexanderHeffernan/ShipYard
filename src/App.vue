@@ -8,12 +8,15 @@ import AppSidebar from './components/sidebar/AppSidebar.vue';
 import ProjectSwitcher from './components/sidebar/ProjectSwitcher.vue';
 import ConfirmationDialog from './components/ui/ConfirmationDialog.vue';
 import { useProjects } from './composables/useProjects';
+import { useNotifications } from './composables/useNotifications';
 import { useRunner } from './composables/useRunner';
 import { useShippingCompletion } from './composables/useShippingCompletion';
 import { useUpdates } from './composables/useUpdates';
+import { useWindowFullscreen } from './composables/useWindowFullscreen';
 import { getSunsetEffectEnabled } from './services/completionAnimation';
 import { deleteWorkItem, inspectWorkItemDeletion } from './services/projects';
 import type { DeleteWorkItemRequest, DeletionPlan, Project, WorkItem } from './types/projects';
+import { titlebarControlsInset } from './utils/titlebar';
 import { workItemTitle } from './utils/workItems';
 
 const sidebarOpen = ref(true);
@@ -25,6 +28,7 @@ const appSettingsOpen = ref(false);
 const settledShippingRunId = ref<string | null>(null);
 const shippedLabel = ref<string | null>(null);
 const shippedProject = ref<string | null>(null);
+const notificationsReady = ref(false);
 const deletion = ref<{
   project: Project;
   item: WorkItem;
@@ -39,9 +43,11 @@ const {
   loading,
   error,
   loadProjects,
+  refreshAllProjects,
   addProject,
   rescanProject,
   removeProject,
+  updateProjectIdentity,
   disposeProjects,
 } = useProjects();
 const { currentRun } = useRunner();
@@ -50,7 +56,9 @@ const {
   observeRun: observeShippingRun,
   dismiss: dismissCompletion,
 } = useShippingCompletion();
+const notifications = useNotifications();
 const { startAutomaticChecks, stopAutomaticChecks } = useUpdates();
+const { isFullscreen, fullscreenStateReady } = useWindowFullscreen();
 const selection = computed(() => {
   for (const project of projects.value) {
     const workItem = project.workItems.find((item) => item.id === selectedWorkItemId.value);
@@ -61,16 +69,28 @@ const selection = computed(() => {
 let completionSwapTimer: number | undefined;
 let standardCompletionTimer: number | undefined;
 
+async function initializeApp() {
+  await loadProjects();
+  await notifications.loadSettings();
+  notificationsReady.value = true;
+  await notifications.observeProjects(projects.value);
+  notifications.startPolling(refreshAllProjects);
+}
+
 onMounted(() => {
-  void loadProjects();
+  void initializeApp();
   startAutomaticChecks();
 });
 onBeforeUnmount(() => {
   disposeProjects();
+  notifications.stopPolling();
   stopAutomaticChecks();
   window.clearTimeout(completionSwapTimer);
   window.clearTimeout(standardCompletionTimer);
 });
+watch(projects, (value) => {
+  if (notificationsReady.value) void notifications.observeProjects(value);
+}, { deep: true });
 watch(selection, (current) => {
   if (selectedWorkItemId.value && !current) selectedWorkItemId.value = null;
 });
@@ -102,17 +122,21 @@ watch(currentRun, (run) => {
     : run.shippingAction === 'createPullRequest' ? 'a pull request' : 'the pull request';
   const label = item ? workItemTitle(item) : run.scriptLabel;
   const sunsetEffect = getSunsetEffectEnabled();
-  observeShippingRun(
-    run,
-    sunsetEffect,
-    {
-      workItemLabel: label,
-      destination,
-    },
-  );
+  if (run.shippingAction !== 'resolvePullRequest') {
+    observeShippingRun(
+      run,
+      sunsetEffect,
+      {
+        workItemLabel: label,
+        destination,
+      },
+    );
+  }
   if (settledShippingRunId.value === run.runId) return;
   settledShippingRunId.value = run.runId;
-  if (run.status === 'succeeded') beginCompletionTransition(label, project?.name ?? 'this project', sunsetEffect);
+  if (run.status === 'succeeded' && run.shippingAction !== 'resolvePullRequest') {
+    beginCompletionTransition(label, project?.name ?? 'this project', sunsetEffect);
+  }
   void rescanProject(run.projectId);
 }, { deep: true });
 
@@ -200,10 +224,14 @@ const deletionConfirmLabel = computed(() => {
 </script>
 
 <template>
-  <div class="app-shell">
+  <div
+    class="app-shell"
+    :style="{ '--titlebar-controls-leading-inset': `${titlebarControlsInset(isFullscreen)}px` }"
+    :data-window-fullscreen="isFullscreen ? 'true' : 'false'"
+  >
     <header class="window-drag-region" data-tauri-drag-region></header>
 
-    <div class="titlebar-controls">
+    <div v-if="fullscreenStateReady" class="titlebar-controls">
       <button
         class="sidebar-toggle"
         type="button"
@@ -225,6 +253,7 @@ const deletionConfirmLabel = computed(() => {
         @add="addProject"
         @remove="removeProject"
         @settings="openProjectSettings"
+        @identity="updateProjectIdentity"
       />
     </div>
 
@@ -244,6 +273,7 @@ const deletionConfirmLabel = computed(() => {
           :project="selection?.project ?? null"
           :work-item="selection?.workItem ?? null"
           :sidebar-open="sidebarOpen"
+          :fullscreen="isFullscreen"
           :shipped-label="shippedLabel"
           :shipped-project="shippedProject"
           @settings="openSettings"
@@ -350,7 +380,7 @@ const deletionConfirmLabel = computed(() => {
   position: fixed;
   z-index: 4;
   top: 4px;
-  left: 82px;
+  left: var(--titlebar-controls-leading-inset);
   display: flex;
   align-items: center;
   gap: 4px;
