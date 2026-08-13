@@ -32,6 +32,10 @@ jobs:
     runs-on: macos-latest
     strategy:
       fail-fast: false
+      # tauri-action updates latest.json by reading, replacing, and re-uploading
+      # the release asset. Keep these jobs serialized so the two architecture
+      # entries cannot overwrite each other.
+      max-parallel: 1
       matrix:
         include:
           - target: aarch64-apple-darwin
@@ -79,8 +83,57 @@ jobs:
           releaseName: "Shipyard v${{ needs.version.outputs.version }}"
           releaseBody: 'Signed macOS update for Shipyard.'
           generateReleaseNotes: true
-          releaseDraft: false
+          # Do not expose a release through /releases/latest until both
+          # architectures have contributed to latest.json.
+          releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true
           uploadUpdaterSignatures: true
           args: "--target ${{ matrix.target }}"
+
+  publish-release:
+    needs:
+      - version
+      - publish
+    if: ${{ needs.publish.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Verify updater manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: "v${{ needs.version.outputs.version }}"
+        run: |
+          set -euo pipefail
+
+          release_json="$(mktemp)"
+          manifest_json="$(mktemp)"
+          gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" > "$release_json"
+          manifest_id="$(jq -r '.assets[] | select(.name == "latest.json") | .id' "$release_json")"
+
+          if [ -z "$manifest_id" ] || [ "$manifest_id" = "null" ]; then
+            echo 'The draft release does not contain latest.json.' >&2
+            exit 1
+          fi
+
+          gh api \
+            -H 'Accept: application/octet-stream' \
+            "repos/${GITHUB_REPOSITORY}/releases/assets/${manifest_id}" \
+            > "$manifest_json"
+
+          jq -e --arg version "${RELEASE_TAG#v}" '.version == $version' "$manifest_json" > /dev/null
+          for platform in darwin-aarch64 darwin-aarch64-app darwin-x86_64 darwin-x86_64-app; do
+            jq -e --arg platform "$platform" \
+              '.platforms[$platform].url and .platforms[$platform].signature' \
+              "$manifest_json" > /dev/null || {
+                echo "The updater manifest is missing $platform." >&2
+                exit 1
+              }
+          done
+
+      - name: Publish complete release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: "v${{ needs.version.outputs.version }}"
+        run: gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
