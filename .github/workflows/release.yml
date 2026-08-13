@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: release-main
@@ -29,6 +29,8 @@ jobs:
 
   publish:
     needs: version
+    permissions:
+      contents: write
     runs-on: macos-latest
     strategy:
       fail-fast: false
@@ -74,7 +76,7 @@ jobs:
       - name: Build and publish macOS release
         uses: tauri-apps/tauri-action@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           APPLE_SIGNING_IDENTITY: '-'
@@ -100,40 +102,56 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
       - name: Verify updater manifest
+        id: verify
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: "v${{ needs.version.outputs.version }}"
         run: |
           set -euo pipefail
 
+          release_pages_json="$(mktemp)"
           release_json="$(mktemp)"
           manifest_json="$(mktemp)"
-          gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" > "$release_json"
-          manifest_id="$(jq -r '.assets[] | select(.name == "latest.json") | .id' "$release_json")"
 
-          if [ -z "$manifest_id" ] || [ "$manifest_id" = "null" ]; then
-            echo 'The draft release does not contain latest.json.' >&2
-            exit 1
-          fi
+          # GitHub returns 404 from /releases/tags/{tag} while the matching
+          # release is a draft. Enumerate releases, then use the numeric ID.
+          gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+            > "$release_pages_json"
+          jq -s 'add' "$release_pages_json" > "$release_json"
+          release_id="$(node scripts/release-workflow.mjs release-id "$release_json" "$RELEASE_TAG")"
+          gh api "repos/${GITHUB_REPOSITORY}/releases/${release_id}" > "$release_json"
+          manifest_id="$(node scripts/release-workflow.mjs manifest-asset-id "$release_json" "$RELEASE_TAG")"
 
           gh api \
             -H 'Accept: application/octet-stream' \
             "repos/${GITHUB_REPOSITORY}/releases/assets/${manifest_id}" \
             > "$manifest_json"
 
-          jq -e --arg version "${RELEASE_TAG#v}" '.version == $version' "$manifest_json" > /dev/null
-          for platform in darwin-aarch64 darwin-aarch64-app darwin-x86_64 darwin-x86_64-app; do
-            jq -e --arg platform "$platform" \
-              '.platforms[$platform].url and .platforms[$platform].signature' \
-              "$manifest_json" > /dev/null || {
-                echo "The updater manifest is missing $platform." >&2
-                exit 1
-              }
-          done
+          node scripts/release-workflow.mjs validate-manifest "$manifest_json" "$RELEASE_TAG"
+          echo "release_id=${release_id}" >> "$GITHUB_OUTPUT"
+          echo "Validated complete updater manifest for ${RELEASE_TAG}."
 
       - name: Publish complete release
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: "v${{ needs.version.outputs.version }}"
-        run: gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+          RELEASE_ID: ${{ steps.verify.outputs.release_id }}
+        run: |
+          set -euo pipefail
+
+          published_release_json="$(mktemp)"
+          gh api \
+            --method PATCH \
+            --field draft=false \
+            --raw-field make_latest=true \
+            "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" \
+            > "$published_release_json"
+          node scripts/release-workflow.mjs verify-published \
+            "$published_release_json" "$RELEASE_TAG"
