@@ -16,6 +16,8 @@ const anotherRunActive = computed(() => !!currentRun.value && ['running', 'stopp
 const syncState = computed(() => pullRequestSyncState(props.workItem));
 const needsUpdate = computed(() => !!syncState.value && syncState.value !== 'synced');
 const blocked = computed(() => !!props.workItem.pullRequest && !needsUpdate.value && ['checksPending', 'checksFailed', 'reviewRequired', 'draft'].includes(props.workItem.pullRequest.mergeState));
+const canResolveWithoutMerging = computed(() => props.workItem.pullRequest?.mergeState === 'conflicting' && !needsUpdate.value);
+const hasMenu = computed(() => !props.workItem.pullRequest || props.workItem.pullRequest.mergeState === 'conflicting');
 const primaryLabel = computed(() => {
   if (active.value && currentRun.value?.status === 'stopping') return 'Stopping…';
   if (active.value) return 'Stop';
@@ -55,6 +57,12 @@ async function directToMain() {
   await shipWork(props.project, props.workItem, 'directToMain');
 }
 
+async function resolveWithoutMerging() {
+  if (!canResolveWithoutMerging.value) return;
+  menuOpen.value = false;
+  await shipWork(props.project, props.workItem, 'resolvePullRequest');
+}
+
 function closeMenu(event: PointerEvent) {
   if (!root.value?.contains(event.target as Node)) menuOpen.value = false;
 }
@@ -71,15 +79,20 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeMenu));
 
 <template>
   <div ref="root" class="ship-control">
-    <button class="ship-control__main" :class="{ 'ship-control__main--single': workItem.pullRequest }" type="button" :disabled="anotherRunActive || blocked || unavailable" :title="unavailable ? (needsUpdate ? 'A checked-out local branch is required to update this pull request' : 'GitHub connection is required to ship this work') : primaryLabel" @click="primary">
+    <button class="ship-control__main" :class="{ 'ship-control__main--single': !hasMenu }" type="button" :disabled="anotherRunActive || blocked || unavailable" :title="unavailable ? (needsUpdate ? 'A checked-out local branch is required to update this pull request' : 'GitHub connection is required to ship this work') : primaryLabel" @click="primary">
       <svg viewBox="0 0 16 16" aria-hidden="true"><path v-if="active" d="M4.5 4.5h7v7h-7z"/><path v-else d="M2.5 9.5h11l-2 3h-7l-2-3Zm3-1V3.5l5 2.5-5 2.5Z"/></svg>
       <span>{{ primaryLabel }}</span>
     </button>
-    <button v-if="!workItem.pullRequest" class="ship-control__menu-button" type="button" aria-label="More shipping options" :aria-expanded="menuOpen" :disabled="anotherRunActive || unavailable" @click="menuOpen = !menuOpen">
+    <button v-if="hasMenu" class="ship-control__menu-button" type="button" aria-label="More shipping options" :aria-expanded="menuOpen" :disabled="anotherRunActive || unavailable" @click="menuOpen = !menuOpen">
       <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4.5 6 3.5 3.5L11.5 6"/></svg>
     </button>
-    <div v-if="menuOpen && !workItem.pullRequest" class="ship-menu">
-      <button type="button" @click="directToMain">Ship directly to {{ project.defaultBranch }}</button>
+    <div v-if="menuOpen && hasMenu" class="ship-menu">
+      <button v-if="!workItem.pullRequest" type="button" @click="directToMain">Ship directly to {{ project.defaultBranch }}</button>
+      <button v-if="workItem.pullRequest" type="button" :disabled="!canResolveWithoutMerging" @click="resolveWithoutMerging">
+        <span>Resolve conflicts only</span>
+        <small>Leave PR open</small>
+      </button>
+      <p v-if="workItem.pullRequest && !canResolveWithoutMerging">Update the pull request before resolving its conflicts.</p>
       <p v-if="error">{{ error }}</p>
     </div>
   </div>
@@ -97,8 +110,10 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeMenu));
 .ship-control__menu-button { width: 22px; justify-content: center; padding: 0 !important; margin-left: -1px; border-radius: 0 6px 6px 0; }
 .ship-control__menu-button svg { width: 10px; }
 .ship-menu { position: absolute; z-index: 7; top: 29px; right: 0; width: 210px; padding: 5px; background: var(--surface-elevated); border: 1px solid var(--border-strong); border-radius: 8px; box-shadow: var(--shadow-elevated); }
-.ship-menu button { width: 100%; min-height: 30px; padding: 5px 8px; font: inherit; font-size: 11px; color: var(--text-primary); text-align: left; background: transparent; border: 0; border-radius: 5px; }
-.ship-menu button:hover { background: var(--surface-hover); }
+.ship-menu button { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 30px; padding: 5px 8px; font: inherit; font-size: 11px; color: var(--text-primary); text-align: left; background: transparent; border: 0; border-radius: 5px; }
+.ship-menu button:hover:not(:disabled) { background: var(--surface-hover); }
+.ship-menu button:disabled { color: var(--text-secondary); }
+.ship-menu small { flex: 0 0 auto; font-size: 9px; color: var(--text-secondary); }
 .ship-menu p { margin: 0; padding: 7px; font-size: 10px; color: var(--danger); }
 
 @media (max-width: 680px) {

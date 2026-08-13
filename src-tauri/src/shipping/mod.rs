@@ -29,6 +29,7 @@ enum ShippingAction {
     CreatePullRequest,
     UpdatePullRequest,
     MergePullRequest,
+    ResolvePullRequest,
     DirectToMain,
 }
 
@@ -51,7 +52,11 @@ fn prepare_with_adapter(
     let source = git::validate_worktree(&request.project_id, &request.source_path)?;
     let primary_checkout = git::primary_worktree_path(&source)?;
     let branch = request.source_branch.as_deref();
-    if !matches!(request.action, ShippingAction::MergePullRequest) && branch.is_none() {
+    if !matches!(
+        request.action,
+        ShippingAction::MergePullRequest | ShippingAction::ResolvePullRequest
+    ) && branch.is_none()
+    {
         return Err("Create a branch before shipping this work".to_owned());
     }
     if branch == Some(request.default_branch.as_str()) {
@@ -220,7 +225,10 @@ integrate_target() {{
         managed_checkout = managed_checkout.map(shell).unwrap_or_else(|| "''".to_owned()),
         agent_label = adapter.label(),
         conflict_command = conflict_command,
-        checkout_guard = if matches!(request.action, ShippingAction::MergePullRequest) {
+        checkout_guard = if matches!(
+            request.action,
+            ShippingAction::MergePullRequest | ShippingAction::ResolvePullRequest
+        ) {
             ":"
         } else {
             "[[ \"$(git -C \"$source\" branch --show-current)\" == \"$branch\" ]]"
@@ -306,15 +314,13 @@ fi"#
                     ""
                 },
         ),
-        ShippingAction::MergePullRequest => {
+        ShippingAction::MergePullRequest | ShippingAction::ResolvePullRequest => {
             let number = request
                 .pull_request_number
                 .ok_or_else(|| "Pull request number is required".to_owned())?;
-            format!(
-                r#"
-{local_guard}
-if [[ -n "${{source_sha:-}}" ]] && ! git -C "$source" merge-tree --write-tree "$source_sha" "origin/$base" >/dev/null; then
-  integrate_target "$source_sha" "origin/$base" "branch conflicts with origin/$base"
+            let after_resolution = match request.action {
+                ShippingAction::MergePullRequest => format!(
+                    r#"if [[ -n "${{RESOLVED_SHA:-}}" ]]; then
   git -C "$source" push origin "${{RESOLVED_SHA}}:refs/heads/${{branch}}"
 fi
 echo "Shipyard · merging pull request #{number}"
@@ -327,7 +333,28 @@ if [[ -n "$managed_checkout" ]] && [[ -d "$managed_checkout" ]]; then
 fi
 echo "Shipyard · pull request merged"
 "#,
-                number = number,
+                    number = number,
+                ),
+                ShippingAction::ResolvePullRequest => r#"if [[ -n "${RESOLVED_SHA:-}" ]]; then
+  git -C "$source" push origin "${RESOLVED_SHA}:refs/heads/${branch}"
+  git -C "$source" fetch origin "$branch"
+  echo "Shipyard · conflicts resolved; pull request left open for review"
+else
+  echo "Shipyard · pull request is already conflict-free"
+fi
+"#
+                .to_owned(),
+                _ => unreachable!(),
+            };
+            format!(
+                r#"
+{local_guard}
+if [[ -n "${{source_sha:-}}" ]] && ! git -C "$source" merge-tree --write-tree "$source_sha" "origin/$base" >/dev/null; then
+  integrate_target "$source_sha" "origin/$base" "branch conflicts with origin/$base"
+fi
+{after_resolution}
+"#,
+                after_resolution = after_resolution,
                 local_guard = request.source_branch.as_deref().map(|branch| format!(
                     r#"branch={branch}
 git -C "$source" fetch origin "$base" "$branch"
@@ -384,7 +411,7 @@ printf '%s\n' "$source_sha" > {shipped_commit}
 echo "ShipYard · shipped directly to $base"
 "#
         .replace("{shipped_commit}", &shell(shipped_commit_path)),
-        ShippingAction::MergePullRequest => String::new(),
+        ShippingAction::MergePullRequest | ShippingAction::ResolvePullRequest => String::new(),
     };
 
     Ok(format!(
@@ -637,7 +664,7 @@ mod tests {
     }
 
     #[test]
-    fn merging_a_remote_only_conflicting_pull_request_asks_the_agent_to_resolve() {
+    fn resolving_a_remote_only_conflicting_pull_request_can_happen_before_merging() {
         let root = temporary("merge-remote-pr");
         let remote = root.join("remote.git");
         let checkout = root.join("checkout");
@@ -697,13 +724,13 @@ mod tests {
         let prepared = prepare_with_adapter(
             &data,
             ShippingRequest {
-                project_id,
+                project_id: project_id.clone(),
                 _work_item_id: "remote-pr".into(),
                 source_path: checkout.to_string_lossy().into_owned(),
                 source_branch: Some("feature/remote".into()),
                 default_branch: "main".into(),
                 github_repository: "owner/repo".into(),
-                action: ShippingAction::MergePullRequest,
+                action: ShippingAction::ResolvePullRequest,
                 pull_request_number: Some(7),
             },
             &adapter,
@@ -713,7 +740,7 @@ mod tests {
         let path = format!("{}:{inherited_path}", fake_bin.to_string_lossy());
         let output = Command::new("/bin/zsh")
             .arg(&prepared.script_path)
-            .env("PATH", path)
+            .env("PATH", &path)
             .env("SHIPYARD_TEST_GH_OUTPUT", &gh_output)
             .output()
             .unwrap();
@@ -727,10 +754,9 @@ mod tests {
             String::from_utf8_lossy(&output.stdout)
                 .contains("Shipyard · resolving automatically with Test agent")
         );
-        assert_eq!(
-            fs::read_to_string(&gh_output).unwrap().trim(),
-            "pr merge 7 --repo owner/repo --squash --delete-branch"
-        );
+        assert!(String::from_utf8_lossy(&output.stdout)
+            .contains("pull request left open for review"));
+        assert!(!gh_output.exists());
         run(&checkout, &["fetch", "origin", "feature/remote"]);
         assert_eq!(
             text(
@@ -747,6 +773,38 @@ mod tests {
             .split_whitespace()
             .count(),
             3
+        );
+
+        let merge_prepared = prepare_with_adapter(
+            &data,
+            ShippingRequest {
+                project_id,
+                _work_item_id: "remote-pr".into(),
+                source_path: checkout.to_string_lossy().into_owned(),
+                source_branch: Some("feature/remote".into()),
+                default_branch: "main".into(),
+                github_repository: "owner/repo".into(),
+                action: ShippingAction::MergePullRequest,
+                pull_request_number: Some(7),
+            },
+            &adapter,
+        )
+        .unwrap();
+        let merge_output = Command::new("/bin/zsh")
+            .arg(&merge_prepared.script_path)
+            .env("PATH", path)
+            .env("SHIPYARD_TEST_GH_OUTPUT", &gh_output)
+            .output()
+            .unwrap();
+        assert!(
+            merge_output.status.success(),
+            "{}\n{}",
+            String::from_utf8_lossy(&merge_output.stdout),
+            String::from_utf8_lossy(&merge_output.stderr)
+        );
+        assert_eq!(
+            fs::read_to_string(&gh_output).unwrap().trim(),
+            "pr merge 7 --repo owner/repo --squash --delete-branch"
         );
         fs::remove_dir_all(root).unwrap();
     }
