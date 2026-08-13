@@ -1,58 +1,16 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue';
-import { Check, Eye, Sparkles } from '@lucide/vue';
-import AppButton from '../ui/AppButton.vue';
+import { Sparkles } from '@lucide/vue';
+import { ref } from 'vue';
 import {
-  completionAnimationOptions,
-  completionAnimationSpeedOptions,
-  type CompletionAnimation,
-  type CompletionAnimationSpeed,
-} from '../../types/celebration';
-import {
-  getCompletionAnimation,
-  getCompletionAnimationSpeed,
-  setCompletionAnimation,
-  setCompletionAnimationSpeed,
+  getSunsetEffectEnabled,
+  setSunsetEffectEnabled,
 } from '../../services/completionAnimation';
 
-const emit = defineEmits<{ preview: [animation: CompletionAnimation, speed: CompletionAnimationSpeed] }>();
-const selectedAnimation = ref<CompletionAnimation>(getCompletionAnimation());
-const selectedSpeed = ref<CompletionAnimationSpeed>(getCompletionAnimationSpeed());
-const saved = ref(false);
-const previewing = ref(false);
-let savedTimer: number | undefined;
-let previewTimer: number | undefined;
+const sunsetEffect = ref(getSunsetEffectEnabled());
 
-const selectedOption = computed(() => completionAnimationOptions.find(
-  (option) => option.id === selectedAnimation.value,
-) ?? completionAnimationOptions[0]);
-
-function chooseAnimation(event: Event) {
-  const value = (event.target as HTMLSelectElement).value as CompletionAnimation;
-  selectedAnimation.value = setCompletionAnimation(value);
-  saved.value = true;
-  window.clearTimeout(savedTimer);
-  savedTimer = window.setTimeout(() => (saved.value = false), 1400);
+function updateSunsetEffect(event: Event) {
+  sunsetEffect.value = setSunsetEffectEnabled((event.target as HTMLInputElement).checked);
 }
-
-function chooseSpeed(event: Event) {
-  selectedSpeed.value = setCompletionAnimationSpeed((event.target as HTMLSelectElement).value);
-  saved.value = true;
-  window.clearTimeout(savedTimer);
-  savedTimer = window.setTimeout(() => (saved.value = false), 1400);
-}
-
-function previewAnimation() {
-  previewing.value = true;
-  emit('preview', selectedAnimation.value, selectedSpeed.value);
-  window.clearTimeout(previewTimer);
-  previewTimer = window.setTimeout(() => (previewing.value = false), 1400);
-}
-
-onBeforeUnmount(() => {
-  window.clearTimeout(savedTimer);
-  window.clearTimeout(previewTimer);
-});
 </script>
 
 <template>
@@ -60,61 +18,28 @@ onBeforeUnmount(() => {
     <div class="experimental-settings__heading">
       <div>
         <h3>Experimental</h3>
-        <p>Small moments of delight for the end of a successful shipment.</p>
+        <p>Try new Shipyard features before they are generally available.</p>
       </div>
       <span class="experimental-settings__badge"><Sparkles aria-hidden="true" /> Experimental</span>
     </div>
 
     <section class="experimental-card">
       <div class="experimental-card__icon"><Sparkles aria-hidden="true" /></div>
-      <div class="experimental-card__content">
-        <label for="completion-animation">Completion animation</label>
-        <p>Shown once after a merge or push really completes. The default stays out of the way; the other eleven options fill the screen.</p>
-        <div class="experimental-card__controls">
-          <select id="completion-animation" :value="selectedAnimation" @change="chooseAnimation">
-            <option v-for="option in completionAnimationOptions" :key="option.id" :value="option.id">
-              {{ option.label }}
-            </option>
-          </select>
-          <div class="experimental-card__speed">
-            <span>Speed</span>
-            <select
-              id="completion-animation-speed"
-              :value="selectedSpeed"
-              :disabled="!selectedOption.fullScreen"
-              aria-label="Full-screen animation speed"
-              :title="selectedOption.fullScreen ? 'Full-screen animation speed' : 'Quiet handoff has no full-screen animation'"
-              @change="chooseSpeed"
-            >
-              <option v-for="option in completionAnimationSpeedOptions" :key="option.id" :value="option.id">
-                {{ option.label }}
-              </option>
-            </select>
-          </div>
-          <AppButton
-            variant="ghost"
-            size="small"
-            type="button"
-            :loading="previewing"
-            loading-label="Previewing"
-            @click="previewAnimation"
-          >
-            <Eye aria-hidden="true" /> Preview
-          </AppButton>
-        </div>
-        <div class="experimental-card__selection">
-          <Check v-if="saved" aria-hidden="true" />
-          <div class="experimental-card__selection-copy">
-            <strong>{{ selectedOption.label }}</strong>
-            <span>{{ selectedOption.description }}</span>
-          </div>
-        </div>
+      <div class="experimental-card__copy">
+        <label for="sunset-effect">Full-screen ship effect</label>
+        <p>Watch your ship sail into the sunset after shipping.</p>
       </div>
+      <label class="toggle" for="sunset-effect">
+        <input
+          id="sunset-effect"
+          type="checkbox"
+          :checked="sunsetEffect"
+          @change="updateSunsetEffect"
+        />
+        <span aria-hidden="true"></span>
+      </label>
     </section>
 
-    <p class="experimental-note">
-      Preview is intentional and never changes project state. Speed applies to full-screen animations; Quiet handoff uses a short, gentle receipt.
-    </p>
   </main>
 </template>
 
@@ -149,10 +74,10 @@ onBeforeUnmount(() => {
 
 .experimental-settings__badge {
   display: inline-flex;
+  height: 22px;
   flex: 0 0 auto;
   align-items: center;
   gap: 5px;
-  height: 22px;
   padding: 0 8px;
   font-size: 9px;
   font-weight: 600;
@@ -164,13 +89,12 @@ onBeforeUnmount(() => {
   border-radius: 11px;
 }
 
-.experimental-settings__badge svg {
-  width: 12px;
-  height: 12px;
-}
+.experimental-settings__badge svg { width: 12px; height: 12px; }
 
 .experimental-card {
   display: flex;
+  min-height: 72px;
+  align-items: center;
   gap: 14px;
   padding: 16px;
   background: linear-gradient(135deg, rgba(251, 119, 31, 0.08), var(--surface-subtle) 48%);
@@ -190,146 +114,34 @@ onBeforeUnmount(() => {
   border-radius: 10px;
 }
 
-.experimental-card__icon svg {
-  width: 19px;
-  height: 19px;
-  stroke-width: 1.5;
-}
+.experimental-card__icon svg { width: 19px; height: 19px; stroke-width: 1.5; }
+.experimental-card__copy { min-width: 0; flex: 1; }
+.experimental-card__copy > label { font-size: 12px; font-weight: 600; color: var(--text-primary); }
 
-.experimental-card__content {
-  min-width: 0;
-  flex: 1;
-}
-
-.experimental-card label {
-  display: block;
-  margin-bottom: 4px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.experimental-card__controls {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 14px;
-}
-
-.experimental-card select {
-  min-width: 0;
-  height: 32px;
-  flex: 1;
-  padding: 0 30px 0 9px;
-  font: inherit;
-  font-size: 11px;
-  color: var(--text-primary);
-  background-color: var(--surface-input);
+.toggle { position: relative; display: block; width: 34px; height: 20px; flex: 0 0 auto; }
+.toggle input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.toggle span {
+  position: absolute;
+  inset: 0;
+  cursor: pointer;
+  background: var(--surface-input);
   border: 1px solid var(--border-strong);
-  border-radius: 7px;
-  outline: none;
+  border-radius: 10px;
+  transition: background 160ms ease, border-color 160ms ease;
 }
-
-.experimental-card select:focus-visible {
-  border-color: var(--focus-ring);
-  box-shadow: 0 0 0 2px rgba(251, 119, 31, 0.16);
+.toggle span::after {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 12px;
+  height: 12px;
+  content: '';
+  background: var(--text-secondary);
+  border-radius: 50%;
+  transition: transform 160ms ease, background 160ms ease;
 }
+.toggle input:checked + span { background: var(--primary); border-color: var(--primary); }
+.toggle input:checked + span::after { background: white; transform: translateX(14px); }
+.toggle input:focus-visible + span { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 
-.experimental-card select:disabled {
-  cursor: not-allowed;
-  opacity: 0.48;
-}
-
-.experimental-card__speed {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 6px;
-}
-
-.experimental-card__speed > span {
-  font-size: 9px;
-  font-weight: 600;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-
-.experimental-card__speed select {
-  width: 112px;
-  flex: 0 0 112px;
-}
-
-.experimental-card__controls :deep(.app-button) {
-  flex: 0 0 auto;
-}
-
-.experimental-card__selection {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  min-width: 0;
-  margin-top: 12px;
-  padding-top: 11px;
-  border-top: 1px solid var(--border-subtle);
-}
-
-.experimental-card__selection svg {
-  width: 13px;
-  height: 13px;
-  flex: 0 0 auto;
-  color: var(--success);
-  stroke-width: 2;
-}
-
-.experimental-card__selection strong {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.experimental-card__selection-copy {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.experimental-card__selection span {
-  min-width: 0;
-  font-size: 10px;
-  line-height: 1.35;
-  color: var(--text-secondary);
-}
-
-.experimental-note {
-  margin-top: 16px !important;
-  color: var(--text-muted) !important;
-}
-
-@media (max-width: 620px) {
-  .experimental-card__controls {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .experimental-card__speed {
-    justify-content: space-between;
-  }
-
-  .experimental-card__speed select {
-    width: auto;
-    flex: 1;
-  }
-
-  .experimental-card__selection {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 3px;
-  }
-
-  .experimental-card__selection span {
-    white-space: normal;
-  }
-}
 </style>

@@ -1,29 +1,16 @@
 import {
-  readCompletionAnimation,
-  readCompletionAnimationSpeed,
-  saveCompletionAnimation,
-  saveCompletionAnimationSpeed,
-  type CompletionAnimationStorage,
+  readSunsetEffectEnabled,
+  saveSunsetEffectEnabled,
+  type CompletionEffectStorage,
 } from '../types/celebration';
 
-export function getCompletionAnimation(storage?: CompletionAnimationStorage) {
-  return readCompletionAnimation(storage);
+export function getSunsetEffectEnabled(storage?: CompletionEffectStorage) {
+  return readSunsetEffectEnabled(storage);
 }
 
-export function setCompletionAnimation(
-  animation: unknown,
-  storage?: CompletionAnimationStorage,
+export function setSunsetEffectEnabled(
+  enabled: boolean,
+  storage?: CompletionEffectStorage,
 ) {
-  return saveCompletionAnimation(animation, storage);
-}
-
-export function getCompletionAnimationSpeed(storage?: CompletionAnimationStorage) {
-  return readCompletionAnimationSpeed(storage);
-}
-
-export function setCompletionAnimationSpeed(
-  speed: unknown,
-  storage?: CompletionAnimationStorage,
-) {
-  return saveCompletionAnimationSpeed(speed, storage);
+  return saveSunsetEffectEnabled(enabled, storage);
 }

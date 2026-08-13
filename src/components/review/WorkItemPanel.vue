@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue';
+import shipyardIcon from '../../../src-tauri/icons/128x128.png';
 import type { Project, WorkItem } from '../../types/projects';
 import RunConsole from './RunConsole.vue';
 import WorkItemChanges from './WorkItemChanges.vue';
@@ -9,6 +10,8 @@ defineProps<{
   project: Project | null;
   workItem: WorkItem | null;
   sidebarOpen: boolean;
+  shippedLabel?: string | null;
+  shippedProject?: string | null;
 }>();
 
 const emit = defineEmits<{
@@ -22,7 +25,7 @@ const activeTab = ref<ReviewTab>('changes');
 </script>
 
 <template>
-  <section v-if="project && workItem" class="work-panel">
+  <section v-if="project && workItem && !shippedLabel" class="work-panel">
     <WorkItemHeader
       :project="project"
       :work-item="workItem"
@@ -68,13 +71,16 @@ const activeTab = ref<ReviewTab>('changes');
     <RunConsole :project-id="project.id" />
   </section>
 
-  <section v-else class="work-panel work-panel--empty">
+  <section v-else class="work-panel work-panel--empty" :class="{ 'work-panel--shipped': shippedLabel }">
     <div class="work-panel__placeholder">
-      <svg viewBox="0 0 20 20" aria-hidden="true">
+      <span v-if="shippedLabel" class="work-panel__shipyard-icon" aria-hidden="true">
+        <img :src="shipyardIcon" alt="" />
+      </span>
+      <svg v-else viewBox="0 0 20 20" aria-hidden="true">
         <path d="M4.25 4.25h11.5v11.5H4.25zM7 7h6m-6 3h6m-6 3h3" />
       </svg>
-      <strong>Select work to review</strong>
-      <span>Choose a working, ready, or shipped item from the sidebar.</span>
+      <strong>{{ shippedLabel ? `${shippedLabel} shipped` : 'Select work to review' }}</strong>
+      <span>{{ shippedLabel ? `Successfully shipped to ${shippedProject || 'this project'}.` : 'Choose a working, ready, or shipped item from the sidebar.' }}</span>
     </div>
   </section>
 </template>
@@ -189,4 +195,23 @@ const activeTab = ref<ReviewTab>('changes');
 .work-panel--empty {
   padding-top: var(--titlebar-height);
 }
+
+.work-panel__shipyard-icon {
+  display: block;
+  width: 66px;
+  height: 66px;
+  margin-bottom: 8px;
+  overflow: hidden;
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(251, 119, 31, 0.16);
+}
+
+.work-panel__shipyard-icon img {
+  display: block;
+  width: 82px;
+  height: 82px;
+  max-width: none;
+  transform: translate(-8px, -8px);
+}
+
 </style>

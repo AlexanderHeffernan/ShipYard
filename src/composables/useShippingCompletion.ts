@@ -1,5 +1,4 @@
 import { ref } from 'vue';
-import type { CompletionAnimation, CompletionAnimationSpeed } from '../types/celebration';
 import type { RunState } from '../types/run';
 import type { ShippingAction } from '../types/shipping';
 
@@ -11,10 +10,8 @@ export type ShippingCompletionDetails = {
 export type ShippingCompletion = {
   runId: string;
   action: ShippingAction;
-  animation: CompletionAnimation;
-  speed: CompletionAnimationSpeed;
+  sunsetEffect: boolean;
   details: ShippingCompletionDetails;
-  preview: boolean;
 };
 
 export type ShippingCompletionState = {
@@ -32,8 +29,7 @@ export const initialShippingCompletionState: ShippingCompletionState = {
 export function reduceShippingCompletion(
   state: ShippingCompletionState,
   run: RunState | null,
-  animation: CompletionAnimation,
-  speed: CompletionAnimationSpeed = 'normal',
+  sunsetEffect: boolean,
   details?: ShippingCompletionDetails,
 ): ShippingCompletionState {
   if (
@@ -51,15 +47,13 @@ export function reduceShippingCompletion(
     completion: {
       runId: run.runId,
       action: run.shippingAction,
-      animation,
-      speed,
+      sunsetEffect,
       details: details ?? {
         workItemLabel: run.scriptLabel,
         destination: run.shippingAction === 'mergePullRequest' || run.shippingAction === 'directToMain'
           ? 'the main line'
           : 'a pull request',
       },
-      preview: false,
     },
     lastCompletedRunId: run.runId,
   };
@@ -69,47 +63,20 @@ export function dismissShippingCompletion(state: ShippingCompletionState): Shipp
   return state.visible ? { ...state, visible: false } : state;
 }
 
-export function previewShippingCompletion(
-  state: ShippingCompletionState,
-  animation: CompletionAnimation,
-  speed: CompletionAnimationSpeed = 'normal',
-): ShippingCompletionState {
-  return {
-    ...state,
-    visible: true,
-    completion: {
-      runId: `preview-${animation}-${Date.now()}`,
-      action: 'directToMain',
-      animation,
-      speed,
-      details: {
-        workItemLabel: 'your work',
-        destination: 'the main line',
-      },
-      preview: true,
-    },
-  };
-}
-
 export function useShippingCompletion() {
   const state = ref<ShippingCompletionState>({ ...initialShippingCompletionState });
 
   function observeRun(
     run: RunState | null,
-    animation: CompletionAnimation,
-    speed: CompletionAnimationSpeed = 'normal',
+    sunsetEffect: boolean,
     details?: ShippingCompletionDetails,
   ) {
-    state.value = reduceShippingCompletion(state.value, run, animation, speed, details);
+    state.value = reduceShippingCompletion(state.value, run, sunsetEffect, details);
   }
 
   function dismiss() {
     state.value = dismissShippingCompletion(state.value);
   }
 
-  function preview(animation: CompletionAnimation, speed: CompletionAnimationSpeed = 'normal') {
-    state.value = previewShippingCompletion(state.value, animation, speed);
-  }
-
-  return { state, observeRun, dismiss, preview };
+  return { state, observeRun, dismiss };
 }

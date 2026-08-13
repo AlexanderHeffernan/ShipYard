@@ -11,10 +11,8 @@ import { useProjects } from './composables/useProjects';
 import { useRunner } from './composables/useRunner';
 import { useShippingCompletion } from './composables/useShippingCompletion';
 import { useUpdates } from './composables/useUpdates';
-import { getCompletionAnimation, getCompletionAnimationSpeed } from './services/completionAnimation';
+import { getSunsetEffectEnabled } from './services/completionAnimation';
 import { deleteWorkItem, inspectWorkItemDeletion } from './services/projects';
-import { isFullScreenCompletionAnimation, type CompletionAnimation } from './types/celebration';
-import type { CompletionAnimationSpeed } from './types/celebration';
 import type { DeleteWorkItemRequest, DeletionPlan, Project, WorkItem } from './types/projects';
 import { workItemTitle } from './utils/workItems';
 
@@ -25,6 +23,8 @@ const settingsProject = ref<Project | null>(null);
 const settingsSection = ref<'open' | 'run'>('run');
 const appSettingsOpen = ref(false);
 const settledShippingRunId = ref<string | null>(null);
+const shippedLabel = ref<string | null>(null);
+const shippedProject = ref<string | null>(null);
 const deletion = ref<{
   project: Project;
   item: WorkItem;
@@ -49,7 +49,6 @@ const {
   state: completionState,
   observeRun: observeShippingRun,
   dismiss: dismissCompletion,
-  preview: previewShippingCompletion,
 } = useShippingCompletion();
 const { startAutomaticChecks, stopAutomaticChecks } = useUpdates();
 const selection = computed(() => {
@@ -59,11 +58,8 @@ const selection = computed(() => {
   }
   return null;
 });
-const quietCompletionVisible = computed(() => (
-  completionState.value.visible
-  && completionState.value.completion
-  && !isFullScreenCompletionAnimation(completionState.value.completion.animation)
-));
+let completionSwapTimer: number | undefined;
+let standardCompletionTimer: number | undefined;
 
 onMounted(() => {
   void loadProjects();
@@ -72,10 +68,31 @@ onMounted(() => {
 onBeforeUnmount(() => {
   disposeProjects();
   stopAutomaticChecks();
+  window.clearTimeout(completionSwapTimer);
+  window.clearTimeout(standardCompletionTimer);
 });
 watch(selection, (current) => {
   if (selectedWorkItemId.value && !current) selectedWorkItemId.value = null;
 });
+watch(selectedWorkItemId, (id) => {
+  if (!id) return;
+  shippedLabel.value = null;
+  shippedProject.value = null;
+});
+
+function beginCompletionTransition(label: string, projectName: string, sunsetEffect: boolean) {
+  window.clearTimeout(completionSwapTimer);
+  window.clearTimeout(standardCompletionTimer);
+  completionSwapTimer = window.setTimeout(() => {
+    shippedLabel.value = label;
+    shippedProject.value = projectName;
+    selectedWorkItemId.value = null;
+  }, 420);
+  if (!sunsetEffect) {
+    standardCompletionTimer = window.setTimeout(dismissCompletion, 1050);
+  }
+}
+
 watch(currentRun, (run) => {
   if (!run || run.kind !== 'ship' || !['succeeded', 'failed', 'cancelled'].includes(run.status)) return;
   const project = projects.value.find((candidate) => candidate.id === run.projectId);
@@ -83,17 +100,19 @@ watch(currentRun, (run) => {
   const destination = run.shippingAction === 'mergePullRequest' || run.shippingAction === 'directToMain'
     ? project?.defaultBranch ?? 'the main line'
     : run.shippingAction === 'createPullRequest' ? 'a pull request' : 'the pull request';
+  const label = item ? workItemTitle(item) : run.scriptLabel;
+  const sunsetEffect = getSunsetEffectEnabled();
   observeShippingRun(
     run,
-    getCompletionAnimation(),
-    getCompletionAnimationSpeed(),
+    sunsetEffect,
     {
-      workItemLabel: item ? workItemTitle(item) : run.scriptLabel,
+      workItemLabel: label,
       destination,
     },
   );
   if (settledShippingRunId.value === run.runId) return;
   settledShippingRunId.value = run.runId;
+  if (run.status === 'succeeded') beginCompletionTransition(label, project?.name ?? 'this project', sunsetEffect);
   void rescanProject(run.projectId);
 }, { deep: true });
 
@@ -107,15 +126,7 @@ function openProjectSettings(projectId: string) {
   if (project) openSettings(project);
 }
 
-function previewCompletion(animation: CompletionAnimation, speed: CompletionAnimationSpeed) {
-  previewShippingCompletion(animation, speed);
-}
-
 function closeAppSettings() {
-  if (completionState.value.completion?.preview) {
-    dismissCompletion();
-    return;
-  }
   appSettingsOpen.value = false;
 }
 
@@ -227,19 +238,21 @@ const deletionConfirmLabel = computed(() => {
       @settings="appSettingsOpen = true"
     />
 
-    <main class="app-content" :class="{ 'app-content--quiet-completion': quietCompletionVisible }">
+    <main class="app-content" :class="{ 'app-content--shipping-completion': completionState.visible }">
       <div class="app-content__surface">
         <WorkItemPanel
           :project="selection?.project ?? null"
           :work-item="selection?.workItem ?? null"
           :sidebar-open="sidebarOpen"
+          :shipped-label="shippedLabel"
+          :shipped-project="shippedProject"
           @settings="openSettings"
           @refresh="rescanProject"
         />
       </div>
 
       <ShippingCelebration
-        v-if="completionState.visible && completionState.completion"
+        v-if="completionState.visible && completionState.completion?.sunsetEffect"
         :key="completionState.completion.runId"
         :completion="completionState.completion"
         @close="dismissCompletion"
@@ -252,7 +265,7 @@ const deletionConfirmLabel = computed(() => {
       :initial-section="settingsSection"
       @close="settingsProject = null"
     />
-    <AppSettingsModal v-if="appSettingsOpen" @close="closeAppSettings" @preview="previewCompletion" />
+    <AppSettingsModal v-if="appSettingsOpen" @close="closeAppSettings" />
     <ConfirmationDialog
       v-if="deletion"
       :title="deletionTitle"
@@ -307,10 +320,10 @@ const deletionConfirmLabel = computed(() => {
   height: 100%;
   opacity: 1;
   filter: blur(0);
-  transition: opacity 340ms ease, filter 340ms ease;
+  transition: opacity 420ms cubic-bezier(0.4, 0, 0.2, 1), filter 420ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.app-content--quiet-completion .app-content__surface {
+.app-content--shipping-completion .app-content__surface {
   opacity: 0;
   filter: blur(2px);
 }
