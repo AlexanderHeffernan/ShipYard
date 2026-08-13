@@ -1,7 +1,10 @@
 use super::{command, repository, worktree_reader};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::{fs, path::{Path, PathBuf}};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -10,6 +13,7 @@ pub struct CheckoutPullRequestRequest {
     project_path: String,
     pull_request_number: u64,
     head_sha: String,
+    head_branch: String,
 }
 
 #[derive(Serialize)]
@@ -25,7 +29,10 @@ pub fn pull_request(
     let root = repository::validate_worktree(&request.project_id, &request.project_path)?;
     let (_, common_dir) = repository::resolve(&request.project_path)?;
     if repository::path_string(&common_dir) != request.project_id {
-        return Err("project identity no longer matches; rescan before checking out the pull request".to_owned());
+        return Err(
+            "project identity no longer matches; rescan before checking out the pull request"
+                .to_owned(),
+        );
     }
 
     command::output(
@@ -43,17 +50,25 @@ pub fn pull_request(
         return Err("the pull request changed on GitHub; refresh it and try again".to_owned());
     }
 
-    if let Some(existing) = worktree_reader::read(&root)?
-        .into_iter()
-        .find(|worktree| !worktree.bare && worktree.sha == fetched_sha)
-    {
+    if let Some(existing) = worktree_reader::read(&root)?.into_iter().find(|worktree| {
+        !worktree.bare
+            && worktree.sha == fetched_sha
+            && (worktree.detached
+                || worktree.branch.as_deref()
+                    == Some(&format!("refs/heads/{}", request.head_branch)))
+    }) {
         link_node_modules(&root, &existing.path)?;
+        associate_with_pull_request(&root, &existing.path, request.pull_request_number)?;
         return Ok(CheckoutPullRequestResult {
             worktree_path: repository::path_string(&existing.path),
         });
     }
 
-    let path = managed_pull_request_checkout_path(app_data, &request.project_id, request.pull_request_number);
+    let path = managed_pull_request_checkout_path(
+        app_data,
+        &request.project_id,
+        request.pull_request_number,
+    );
     if path.exists() {
         let path_text = repository::path_string(&path);
         let _ = command::output(&root, &["worktree", "remove", "--force", "--", &path_text]);
@@ -62,12 +77,38 @@ pub fn pull_request(
                 .map_err(|error| format!("could not clear stale PR checkout: {error}"))?;
         }
     }
-    let parent = path.parent().ok_or_else(|| "invalid checkout path".to_owned())?;
+    let parent = path
+        .parent()
+        .ok_or_else(|| "invalid checkout path".to_owned())?;
     fs::create_dir_all(parent).map_err(|error| error.to_string())?;
     let path_text = repository::path_string(&path);
-    command::output(&root, &["worktree", "add", "--detach", "--", &path_text, fetched_sha])?;
+    command::output(
+        &root,
+        &["worktree", "add", "--detach", "--", &path_text, fetched_sha],
+    )?;
+    if let Err(error) = associate_with_pull_request(&root, &path, request.pull_request_number) {
+        let _ = command::output(&root, &["worktree", "remove", "--force", "--", &path_text]);
+        return Err(error);
+    }
     link_node_modules(&root, &path)?;
-    Ok(CheckoutPullRequestResult { worktree_path: path_text })
+    Ok(CheckoutPullRequestResult {
+        worktree_path: path_text,
+    })
+}
+
+fn associate_with_pull_request(root: &Path, checkout: &Path, number: u64) -> Result<(), String> {
+    command::output(root, &["config", "extensions.worktreeConfig", "true"])?;
+    let number = number.to_string();
+    command::output(
+        checkout,
+        &[
+            "config",
+            "--worktree",
+            "shipyard.pull-request-number",
+            &number,
+        ],
+    )?;
+    Ok(())
 }
 
 fn link_node_modules(project: &Path, checkout: &Path) -> Result<(), String> {
@@ -79,8 +120,9 @@ fn link_node_modules(project: &Path, checkout: &Path) -> Result<(), String> {
     fs::create_dir_all(checkout)
         .map_err(|error| format!("could not prepare PR checkout dependencies: {error}"))?;
     #[cfg(unix)]
-    std::os::unix::fs::symlink(&source, &destination)
-        .map_err(|error| format!("could not link project dependencies into PR checkout: {error}"))?;
+    std::os::unix::fs::symlink(&source, &destination).map_err(|error| {
+        format!("could not link project dependencies into PR checkout: {error}")
+    })?;
     Ok(())
 }
 
@@ -90,15 +132,27 @@ pub(crate) fn managed_pull_request_checkout_path(
     number: u64,
 ) -> PathBuf {
     let digest = Sha256::digest(project_id.as_bytes());
-    let project = digest.iter().take(8).map(|byte| format!("{byte:02x}")).collect::<String>();
-    app_data.join("pull-request-checkouts").join(project).join(format!("pr-{number}"))
+    let project = digest
+        .iter()
+        .take(8)
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    app_data
+        .join("pull-request-checkouts")
+        .join(project)
+        .join(format!("pr-{number}"))
 }
 
 #[cfg(test)]
 mod tests {
     use super::{pull_request, CheckoutPullRequestRequest};
     use crate::git;
-    use std::{fs, path::Path, process::Command, time::{SystemTime, UNIX_EPOCH}};
+    use std::{
+        fs,
+        path::Path,
+        process::Command,
+        time::{SystemTime, UNIX_EPOCH},
+    };
 
     #[test]
     fn checks_out_a_pull_request_once_and_reuses_it() {
@@ -107,10 +161,20 @@ mod tests {
         let checkout = root.join("checkout");
         let app_data = root.join("data");
         run(&root, &["init", "--bare", remote.to_str().unwrap()]);
-        run(&root, &["clone", remote.to_str().unwrap(), checkout.to_str().unwrap()]);
+        run(
+            &root,
+            &[
+                "clone",
+                remote.to_str().unwrap(),
+                checkout.to_str().unwrap(),
+            ],
+        );
         run(&checkout, &["switch", "-c", "main"]);
         run(&checkout, &["config", "user.name", "Shipyard Test"]);
-        run(&checkout, &["config", "user.email", "shipyard@example.test"]);
+        run(
+            &checkout,
+            &["config", "user.email", "shipyard@example.test"],
+        );
         fs::write(checkout.join("README.md"), "main\n").unwrap();
         run(&checkout, &["add", "."]);
         run(&checkout, &["commit", "-m", "Main"]);
@@ -133,15 +197,48 @@ mod tests {
             project_path: checkout.to_string_lossy().into_owned(),
             pull_request_number: 7,
             head_sha: head.clone(),
+            head_branch: "feature/pr".into(),
         };
 
         let first = pull_request(&app_data, request()).unwrap();
         assert!(Path::new(&first.worktree_path).is_dir());
-        assert_eq!(text(Path::new(&first.worktree_path), &["rev-parse", "HEAD"]), head);
+        assert_eq!(
+            text(Path::new(&first.worktree_path), &["rev-parse", "HEAD"]),
+            head
+        );
         let second = pull_request(&app_data, request()).unwrap();
         assert_eq!(first.worktree_path, second.worktree_path);
 
-        run(&checkout, &["worktree", "remove", "--force", &first.worktree_path]);
+        let scanned = git::scan_project(checkout.to_str().unwrap()).unwrap();
+        let item = scanned
+            .work_items
+            .iter()
+            .find(|item| item.worktree_path.as_deref() == Some(first.worktree_path.as_str()))
+            .unwrap();
+        assert_eq!(item.pull_request_number, Some(7));
+
+        fs::write(
+            Path::new(&first.worktree_path).join("local.txt"),
+            "local work\n",
+        )
+        .unwrap();
+        run(Path::new(&first.worktree_path), &["add", "local.txt"]);
+        run(
+            Path::new(&first.worktree_path),
+            &["commit", "-m", "Local work"],
+        );
+        let committed = git::scan_project(checkout.to_str().unwrap()).unwrap();
+        let item = committed
+            .work_items
+            .iter()
+            .find(|item| item.worktree_path.as_deref() == Some(first.worktree_path.as_str()))
+            .unwrap();
+        assert_eq!(item.pull_request_number, Some(7));
+
+        run(
+            &checkout,
+            &["worktree", "remove", "--force", &first.worktree_path],
+        );
         fs::remove_dir_all(root).unwrap();
     }
 
@@ -153,24 +250,45 @@ mod tests {
         let checkout = root.join("checkout");
         fs::create_dir_all(project.join("node_modules/vite")).unwrap();
         super::link_node_modules(&project, &checkout).unwrap();
-        assert_eq!(fs::read_link(checkout.join("node_modules")).unwrap(), project.join("node_modules"));
+        assert_eq!(
+            fs::read_link(checkout.join("node_modules")).unwrap(),
+            project.join("node_modules")
+        );
         fs::remove_dir_all(root).unwrap();
     }
 
     fn temporary(label: &str) -> std::path::PathBuf {
-        let suffix = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
         let path = std::env::temp_dir().join(format!("shipyard-pr-{label}-{suffix}"));
         fs::create_dir_all(&path).unwrap();
         path
     }
 
     fn run(root: &Path, args: &[&str]) {
-        let output = Command::new("git").arg("-C").arg(root).args(args).output().unwrap();
-        assert!(output.status.success(), "git {}: {}", args.join(" "), String::from_utf8_lossy(&output.stderr));
+        let output = Command::new("git")
+            .arg("-C")
+            .arg(root)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "git {}: {}",
+            args.join(" "),
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 
     fn text(root: &Path, args: &[&str]) -> String {
-        let output = Command::new("git").arg("-C").arg(root).args(args).output().unwrap();
+        let output = Command::new("git")
+            .arg("-C")
+            .arg(root)
+            .args(args)
+            .output()
+            .unwrap();
         assert!(output.status.success());
         String::from_utf8_lossy(&output.stdout).trim().to_owned()
     }

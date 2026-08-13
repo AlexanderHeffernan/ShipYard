@@ -14,6 +14,7 @@ pub(super) fn read(root: &Path) -> Result<Vec<Worktree>, String> {
         parse_field(command::bytes_text(field), &mut worktrees, &mut current);
     }
     push_current(&mut worktrees, &mut current);
+    read_pull_request_metadata(&mut worktrees);
 
     Ok(worktrees)
 }
@@ -74,5 +75,27 @@ fn parse_field(field: &str, worktrees: &mut Vec<Worktree>, current: &mut Option<
 fn push_current(worktrees: &mut Vec<Worktree>, current: &mut Option<Worktree>) {
     if let Some(worktree) = current.take() {
         worktrees.push(worktree);
+    }
+}
+
+fn read_pull_request_metadata(worktrees: &mut [Worktree]) {
+    for worktree in worktrees.iter_mut().filter(|worktree| !worktree.bare) {
+        worktree.pull_request_number = command::optional_text(
+            &worktree.path,
+            [
+                "config",
+                "--worktree",
+                "--get",
+                "shipyard.pull-request-number",
+            ]
+            .as_slice(),
+        )
+        .or_else(|| {
+            command::optional_text(
+                &worktree.path,
+                ["config", "--get", "shipyard.pull-request-number"].as_slice(),
+            )
+        })
+        .and_then(|value| value.trim().parse().ok());
     }
 }

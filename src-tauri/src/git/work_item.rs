@@ -25,6 +25,8 @@ pub(crate) struct WorkItem {
     pub(crate) project_id: String,
     pub(crate) branch: Option<String>,
     pub(crate) worktree_path: Option<String>,
+    #[serde(skip)]
+    pub(crate) pull_request_number: Option<u64>,
     pub(crate) head_sha: String,
     pub(crate) agent_thread_url: Option<String>,
     pub(crate) last_commit_subject: String,

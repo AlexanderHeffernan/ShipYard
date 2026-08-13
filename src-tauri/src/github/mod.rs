@@ -95,10 +95,12 @@ pub(crate) fn enrich_project(root: &Path, project: &mut Project) {
         project.github_error = Some("GitHub CLI is not installed".to_owned());
         return;
     };
-    let user = command(&path, None, &["api", "user"])
-        .and_then(|value| serde_json::from_str::<GhUser>(&value).map_err(|error| error.to_string()));
+    let user = command(&path, None, &["api", "user"]).and_then(|value| {
+        serde_json::from_str::<GhUser>(&value).map_err(|error| error.to_string())
+    });
     let Ok(user) = user else {
-        project.github_error = Some("Sign in with `gh auth login` to load pull requests".to_owned());
+        project.github_error =
+            Some("Sign in with `gh auth login` to load pull requests".to_owned());
         return;
     };
     let result = command(
@@ -121,14 +123,23 @@ pub(crate) fn enrich_project(root: &Path, project: &mut Project) {
     match result {
         Ok(pull_requests) => {
             for pull_request in &pull_requests {
-                let local_item = project.work_items.iter_mut().find(|item| {
-                    item.branch.as_deref() == Some(&pull_request.head_ref_name)
-                        || (item.branch.is_none() && item.head_sha == pull_request.head_ref_oid)
-                });
-                if let Some(item) = local_item {
+                let local_index = project
+                    .work_items
+                    .iter()
+                    .position(|item| item.pull_request_number == Some(pull_request.number))
+                    .or_else(|| {
+                        project.work_items.iter().position(|item| {
+                            item.branch.as_deref() == Some(&pull_request.head_ref_name)
+                                || (item.branch.is_none()
+                                    && item.head_sha == pull_request.head_ref_oid)
+                        })
+                    });
+                if let Some(index) = local_index {
+                    let item = &mut project.work_items[index];
                     item.id = pull_request_id(&project.id, pull_request.number);
                     if item.agent_thread_url.is_none() {
-                        item.agent_thread_url = git::agent_thread_url(root, &pull_request.head_ref_oid);
+                        item.agent_thread_url =
+                            git::agent_thread_url(root, &pull_request.head_ref_oid);
                     }
                     let (local_commits, remote_commits) =
                         synchronization(root, &item.head_sha, &pull_request.head_ref_oid);
@@ -145,15 +156,23 @@ pub(crate) fn enrich_project(root: &Path, project: &mut Project) {
                     ));
                 }
             }
-            project.work_items.sort_by_key(|item| std::cmp::Reverse(item.updated_at));
+            project
+                .work_items
+                .sort_by_key(|item| std::cmp::Reverse(item.updated_at));
         }
         Err(error) => project.github_error = Some(error),
     }
 }
 
 fn relevant(pull_request: &GhPullRequest, login: &str) -> bool {
-    pull_request.author.as_ref().is_some_and(|author| author.login == login)
-        || pull_request.assignees.iter().any(|assignee| assignee.login == login)
+    pull_request
+        .author
+        .as_ref()
+        .is_some_and(|author| author.login == login)
+        || pull_request
+            .assignees
+            .iter()
+            .any(|assignee| assignee.login == login)
         || pull_request
             .review_requests
             .iter()
@@ -170,6 +189,7 @@ fn remote_pull_request_item(
         project_id: project_id.to_owned(),
         branch: None,
         worktree_path: None,
+        pull_request_number: None,
         head_sha: pull_request.head_ref_oid.clone(),
         agent_thread_url: git::agent_thread_url(root, &pull_request.head_ref_oid),
         last_commit_subject: pull_request.title.clone(),

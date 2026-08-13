@@ -53,7 +53,10 @@ async fn checkout_pull_request(
     app: tauri::AppHandle,
     request: git::CheckoutPullRequestRequest,
 ) -> Result<git::CheckoutPullRequestResult, String> {
-    let data_dir = app.path().app_data_dir().map_err(|error| error.to_string())?;
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| error.to_string())?;
     tauri::async_runtime::spawn_blocking(move || git::checkout_pull_request(&data_dir, request))
         .await
         .map_err(|error| format!("pull request checkout failed: {error}"))?

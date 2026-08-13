@@ -161,7 +161,9 @@ fn validate(request: &DeleteWorkItemRequest) -> Result<ValidatedDeletion, String
     } else {
         return Err("This work item no longer exists. Rescan the project.".to_owned());
     };
-    if request.work_item_id != expected_id && !is_pull_request_id(&request.work_item_id, &request.project_id) {
+    if request.work_item_id != expected_id
+        && !is_pull_request_id(&request.work_item_id, &request.project_id)
+    {
         return Err(
             "Work item identity does not match the current branch or worktree. Rescan the project."
                 .to_owned(),

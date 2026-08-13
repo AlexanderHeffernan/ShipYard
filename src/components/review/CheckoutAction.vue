@@ -28,6 +28,7 @@ async function checkout() {
       projectPath: props.project.path,
       pullRequestNumber: pullRequest.number,
       headSha: pullRequest.headSha,
+      headBranch: pullRequest.headBranch,
     });
     emit('checkedOut');
   } catch (checkoutError) {
