@@ -25,8 +25,12 @@ export function scanProject(path: string) {
   return invoke<ScannedProject>('scan_project', { path });
 }
 
-export function checkoutPullRequest(request: CheckoutPullRequestRequest) {
-  return invoke<{ worktreePath: string }>('checkout_pull_request', { request });
+export function checkoutPullRequest(operationId: string, request: CheckoutPullRequestRequest) {
+  return invoke<{ worktreePath: string }>('checkout_pull_request', { operationId, request });
+}
+
+export function cancelCheckout(operationId: string) {
+  return invoke<void>('cancel_checkout', { operationId });
 }
 
 export function getWorkItemDiff(request: WorkItemDiffRequest) {

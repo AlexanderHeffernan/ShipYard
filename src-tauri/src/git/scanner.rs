@@ -14,7 +14,10 @@ pub fn scan_project(selected_path: &str) -> Result<Project, String> {
     let worktrees = worktree_reader::read(&root)?;
     let visible_worktrees: Vec<_> = worktrees
         .iter()
-        .filter(|worktree| !worktree_reader::is_shipyard_managed(&worktree.path))
+        .filter(|worktree| {
+            !worktree_reader::is_shipyard_managed(&worktree.path)
+                || worktree.pull_request_number.is_some()
+        })
         .cloned()
         .collect();
     let branches = branch_reader::read(&root)?;
@@ -172,6 +175,8 @@ fn branch_work_item(
         project_id: project_id.to_owned(),
         branch: Some(branch.name),
         worktree_path: worktree.map(|item| repository::path_string(&item.path)),
+        managed_checkout: worktree
+            .is_some_and(|item| worktree_reader::is_shipyard_managed(&item.path)),
         pull_request_number: worktree.and_then(|item| item.pull_request_number),
         head_sha: branch.sha,
         agent_thread_url,
@@ -225,6 +230,7 @@ fn unborn_item(project_id: &str, worktree: &Worktree) -> Result<Option<WorkItem>
         project_id: project_id.to_owned(),
         branch: Some(short_branch_name(branch_ref)),
         worktree_path: Some(repository::path_string(&worktree.path)),
+        managed_checkout: worktree_reader::is_shipyard_managed(&worktree.path),
         pull_request_number: worktree.pull_request_number,
         head_sha: worktree.sha.clone(),
         agent_thread_url: None,
@@ -283,6 +289,7 @@ fn detached_item(
         project_id: project_id.to_owned(),
         branch: None,
         worktree_path: Some(repository::path_string(&worktree.path)),
+        managed_checkout: worktree_reader::is_shipyard_managed(&worktree.path),
         pull_request_number: worktree.pull_request_number,
         head_sha: worktree.sha.clone(),
         agent_thread_url: references::agent_thread_url(root, &worktree.sha),

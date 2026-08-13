@@ -1,8 +1,19 @@
-use super::{command, worktree::Worktree};
+use super::{command, command::CancellationToken, worktree::Worktree};
 use std::path::{Path, PathBuf};
 
 pub(super) fn read(root: &Path) -> Result<Vec<Worktree>, String> {
-    let output = command::output(root, &["worktree", "list", "--porcelain", "-z"])?;
+    read_with_cancellation(root, None)
+}
+
+pub(super) fn read_with_cancellation(
+    root: &Path,
+    cancellation: Option<&CancellationToken>,
+) -> Result<Vec<Worktree>, String> {
+    let output = command::output_with_cancellation(
+        root,
+        &["worktree", "list", "--porcelain", "-z"],
+        cancellation,
+    )?;
     let mut worktrees = Vec::new();
     let mut current = None;
 
@@ -14,7 +25,7 @@ pub(super) fn read(root: &Path) -> Result<Vec<Worktree>, String> {
         parse_field(command::bytes_text(field), &mut worktrees, &mut current);
     }
     push_current(&mut worktrees, &mut current);
-    read_pull_request_metadata(&mut worktrees);
+    read_pull_request_metadata(&mut worktrees, cancellation);
 
     Ok(worktrees)
 }
@@ -22,7 +33,10 @@ pub(super) fn read(root: &Path) -> Result<Vec<Worktree>, String> {
 pub(crate) fn paths(root: &Path) -> Result<Vec<PathBuf>, String> {
     Ok(read(root)?
         .into_iter()
-        .filter(|worktree| !worktree.bare && !is_shipyard_managed(&worktree.path))
+        .filter(|worktree| {
+            !worktree.bare
+                && (!is_shipyard_managed(&worktree.path) || worktree.pull_request_number.is_some())
+        })
         .map(|worktree| worktree.path)
         .collect())
 }
@@ -78,9 +92,12 @@ fn push_current(worktrees: &mut Vec<Worktree>, current: &mut Option<Worktree>) {
     }
 }
 
-fn read_pull_request_metadata(worktrees: &mut [Worktree]) {
+fn read_pull_request_metadata(
+    worktrees: &mut [Worktree],
+    cancellation: Option<&CancellationToken>,
+) {
     for worktree in worktrees.iter_mut().filter(|worktree| !worktree.bare) {
-        worktree.pull_request_number = command::optional_text(
+        worktree.pull_request_number = command::optional_text_with_cancellation(
             &worktree.path,
             [
                 "config",
@@ -89,11 +106,13 @@ fn read_pull_request_metadata(worktrees: &mut [Worktree]) {
                 "shipyard.pull-request-number",
             ]
             .as_slice(),
+            cancellation,
         )
         .or_else(|| {
-            command::optional_text(
+            command::optional_text_with_cancellation(
                 &worktree.path,
                 ["config", "--get", "shipyard.pull-request-number"].as_slice(),
+                cancellation,
             )
         })
         .and_then(|value| value.trim().parse().ok());

@@ -1,6 +1,6 @@
 use crate::git::{self, Project, PullRequest, WorkStatus};
 use serde::{Deserialize, Serialize};
-use std::{path::Path, process::Command};
+use std::{collections::HashSet, path::Path, process::Command};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -92,6 +92,7 @@ pub(crate) fn enrich_project(root: &Path, project: &mut Project) {
     };
     project.github_repository = Some(repository.clone());
     let Some(path) = executable("gh") else {
+        hide_unresolved_managed_checkouts(project);
         project.github_error = Some("GitHub CLI is not installed".to_owned());
         return;
     };
@@ -99,6 +100,7 @@ pub(crate) fn enrich_project(root: &Path, project: &mut Project) {
         serde_json::from_str::<GhUser>(&value).map_err(|error| error.to_string())
     });
     let Ok(user) = user else {
+        hide_unresolved_managed_checkouts(project);
         project.github_error =
             Some("Sign in with `gh auth login` to load pull requests".to_owned());
         return;
@@ -122,6 +124,7 @@ pub(crate) fn enrich_project(root: &Path, project: &mut Project) {
     .and_then(|value| serde_json::from_str::<Vec<GhPullRequest>>(&value).map_err(|e| e.to_string()));
     match result {
         Ok(pull_requests) => {
+            let mut matched_managed_checkouts = HashSet::new();
             for pull_request in &pull_requests {
                 let local_index = project
                     .work_items
@@ -136,6 +139,9 @@ pub(crate) fn enrich_project(root: &Path, project: &mut Project) {
                     });
                 if let Some(index) = local_index {
                     let item = &mut project.work_items[index];
+                    if item.managed_checkout {
+                        matched_managed_checkouts.insert(pull_request.number);
+                    }
                     item.id = pull_request_id(&project.id, pull_request.number);
                     if item.agent_thread_url.is_none() {
                         item.agent_thread_url =
@@ -156,12 +162,25 @@ pub(crate) fn enrich_project(root: &Path, project: &mut Project) {
                     ));
                 }
             }
+            project.work_items.retain(|item| {
+                !item.managed_checkout
+                    || item
+                        .pull_request_number
+                        .is_some_and(|number| matched_managed_checkouts.contains(&number))
+            });
             project
                 .work_items
                 .sort_by_key(|item| std::cmp::Reverse(item.updated_at));
         }
-        Err(error) => project.github_error = Some(error),
+        Err(error) => {
+            hide_unresolved_managed_checkouts(project);
+            project.github_error = Some(error);
+        }
     }
+}
+
+fn hide_unresolved_managed_checkouts(project: &mut Project) {
+    project.work_items.retain(|item| !item.managed_checkout);
 }
 
 fn relevant(pull_request: &GhPullRequest, login: &str) -> bool {
@@ -189,6 +208,7 @@ fn remote_pull_request_item(
         project_id: project_id.to_owned(),
         branch: None,
         worktree_path: None,
+        managed_checkout: false,
         pull_request_number: None,
         head_sha: pull_request.head_ref_oid.clone(),
         agent_thread_url: git::agent_thread_url(root, &pull_request.head_ref_oid),
