@@ -13,6 +13,7 @@ dist-ssr
 *.local
 .amp/in/
 .amp/portals/
+!docs/screenshots/
 
 # Editor directories and files
 .vscode/*

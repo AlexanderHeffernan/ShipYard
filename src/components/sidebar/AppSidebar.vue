@@ -2,7 +2,8 @@
 import { Settings, Trash2 } from '@lucide/vue';
 import { computed, onBeforeUnmount, ref } from 'vue';
 import AppButton from '../ui/AppButton.vue';
-import type { Project, WorkItem } from '../../types/projects';
+import ProjectIcon from '../ui/ProjectIcon.vue';
+import type { Project, ProjectImage, WorkItem } from '../../types/projects';
 import { pullRequestSyncState, workItemMeta, workItemTitle, type PullRequestSyncState } from '../../utils/workItems';
 
 const MIN_WIDTH = 224;
@@ -12,6 +13,7 @@ type SidebarWorkItem = WorkItem & {
   title: string;
   meta: string;
   color: string;
+  image: ProjectImage | null;
   projectName: string;
   syncState: PullRequestSyncState | null;
   deletable: boolean;
@@ -48,6 +50,7 @@ const sections = computed<WorkSection[]>(() => {
       title: workItemTitle(item),
       meta: workItemMeta(item),
       color: project.color,
+      image: project.image,
       projectName: project.name,
       syncState: pullRequestSyncState(item),
       deletable: item.branch
@@ -160,7 +163,7 @@ onBeforeUnmount(stopResize);
                 :title="`${item.projectName} · ${item.lastCommitSubject || item.title}`"
                 @click="emit('select', item.id)"
               >
-                <span class="work-item__dot" :style="{ background: item.color }"></span>
+                <ProjectIcon :color="item.color" :image="item.image" size="small" />
                 <span class="work-item__title">{{ item.title }}</span>
                 <span class="work-item__meta" :class="{ 'work-item__meta--attention': item.syncState && item.syncState !== 'synced', 'work-item__meta--danger': item.syncState === 'diverged' }">{{ item.meta }}</span>
               </button>
@@ -345,7 +348,7 @@ onBeforeUnmount(stopResize);
 
 .work-item__select {
   display: grid;
-  grid-template-columns: 10px minmax(0, 1fr) auto;
+  grid-template-columns: 12px minmax(0, 1fr) auto;
   gap: 10px;
   align-items: center;
   width: 100%;
@@ -367,13 +370,6 @@ onBeforeUnmount(stopResize);
 
 .work-item--selected {
   background: var(--surface-hover);
-}
-
-.work-item__dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.24);
 }
 
 .work-item__title {

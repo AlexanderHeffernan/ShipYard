@@ -51,8 +51,24 @@ export type ScannedProject = {
   githubError: string | null;
 };
 
+export type ProjectImage = {
+  dataUrl: string;
+  name: string;
+  type: string;
+  size: number;
+  width: number;
+  height: number;
+};
+
+export type ProjectCustomization = {
+  color: string | null;
+  image: ProjectImage | null;
+};
+
 export type Project = ScannedProject & {
   color: string;
+  colorOverride: string | null;
+  image: ProjectImage | null;
 };
 
 export type WorkItemDiffRequest = {

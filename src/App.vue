@@ -39,6 +39,7 @@ const {
   addProject,
   rescanProject,
   removeProject,
+  updateProjectIdentity,
   disposeProjects,
 } = useProjects();
 const notifications = useNotifications();
@@ -185,6 +186,7 @@ const deletionConfirmLabel = computed(() => {
         @add="addProject"
         @remove="removeProject"
         @settings="openProjectSettings"
+        @identity="updateProjectIdentity"
       />
     </div>
 
