@@ -139,6 +139,7 @@ fn conflict_prompt_text(request: &ShippingRequest) -> String {
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn script(
     request: &ShippingRequest,
     adapter: &dyn agents::AgentAdapter,
