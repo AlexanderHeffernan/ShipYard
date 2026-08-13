@@ -12,6 +12,13 @@ for command in node npm cargo rustc ffmpeg gh git import openbox websockify wmct
   }
 done
 
+for helper in .agents/capture-recording .agents/capture-screenshot .agents/visual-service .agents/wait-for-visual-window; do
+  [[ -x "$helper" ]] || {
+    echo "Visual helper is not executable: $helper" >&2
+    exit 1
+  }
+done
+
 if [[ ! -d node_modules ]]; then
   echo "Missing JavaScript dependencies (rerun .agents/setup)." >&2
   exit 1
