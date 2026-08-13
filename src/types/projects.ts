@@ -7,6 +7,7 @@ export type PullRequest = {
   draft: boolean;
   mergeable: boolean | null;
   mergeState: 'ready' | 'checksPending' | 'checksFailed' | 'reviewRequired' | 'conflicting' | 'draft';
+  attentionState: string;
   headBranch: string;
   baseBranch: string;
   headSha: string;
@@ -27,6 +28,7 @@ export type WorkItem = {
   branch: string | null;
   worktreePath: string | null;
   headSha: string;
+  agentThreadUrl?: string | null;
   lastCommitSubject: string;
   status: WorkStatus;
   pullRequest: PullRequest | null;

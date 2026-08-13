@@ -127,6 +127,9 @@ pub(crate) fn enrich_project(root: &Path, project: &mut Project) {
                 });
                 if let Some(item) = local_item {
                     item.id = pull_request_id(&project.id, pull_request.number);
+                    if item.agent_thread_url.is_none() {
+                        item.agent_thread_url = git::agent_thread_url(root, &pull_request.head_ref_oid);
+                    }
                     let (local_commits, remote_commits) =
                         synchronization(root, &item.head_sha, &pull_request.head_ref_oid);
                     item.pull_request = Some(hydrate_pull_request(
@@ -136,6 +139,7 @@ pub(crate) fn enrich_project(root: &Path, project: &mut Project) {
                     ));
                 } else if relevant(pull_request, &user.login) {
                     project.work_items.push(remote_pull_request_item(
+                        root,
                         &project.id,
                         pull_request,
                     ));
@@ -156,13 +160,18 @@ fn relevant(pull_request: &GhPullRequest, login: &str) -> bool {
             .any(|reviewer| reviewer.login == login)
 }
 
-fn remote_pull_request_item(project_id: &str, pull_request: &GhPullRequest) -> git::WorkItem {
+fn remote_pull_request_item(
+    root: &Path,
+    project_id: &str,
+    pull_request: &GhPullRequest,
+) -> git::WorkItem {
     git::WorkItem {
         id: pull_request_id(project_id, pull_request.number),
         project_id: project_id.to_owned(),
         branch: None,
         worktree_path: None,
         head_sha: pull_request.head_ref_oid.clone(),
+        agent_thread_url: git::agent_thread_url(root, &pull_request.head_ref_oid),
         last_commit_subject: pull_request.title.clone(),
         status: WorkStatus::Ready,
         pull_request: Some(hydrate_pull_request(pull_request, 0, 0)),
@@ -225,6 +234,7 @@ fn hydrate_pull_request(
     } else {
         "ready"
     };
+    let attention_state = normalized_attention_state(value, checks_pending, checks_failed);
     PullRequest {
         number: value.number,
         title: value.title.clone(),
@@ -236,12 +246,37 @@ fn hydrate_pull_request(
             _ => None,
         },
         merge_state: merge_state.to_owned(),
+        attention_state,
         head_branch: value.head_ref_name.clone(),
         base_branch: value.base_ref_name.clone(),
         head_sha: value.head_ref_oid.clone(),
         local_commits,
         remote_commits,
     }
+}
+
+fn normalized_attention_state(
+    value: &GhPullRequest,
+    checks_pending: bool,
+    checks_failed: bool,
+) -> String {
+    let review = match value.review_decision.as_str() {
+        "APPROVED" => "approved",
+        "CHANGES_REQUESTED" => "changesRequested",
+        "REVIEW_REQUIRED" => "reviewRequired",
+        "" => "none",
+        _ => "other",
+    };
+    let checks = if checks_failed {
+        "failed"
+    } else if checks_pending {
+        "pending"
+    } else if value.status_check_rollup.is_empty() {
+        "none"
+    } else {
+        "passed"
+    };
+    format!("review={review}|checks={checks}")
 }
 
 fn parse_repository(remote: &str) -> Option<String> {
@@ -294,7 +329,7 @@ fn git_text(root: &Path, args: &[&str]) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_repository;
+    use super::{normalized_attention_state, parse_repository, GhCheck, GhPullRequest};
 
     #[test]
     fn parses_supported_github_remotes() {
@@ -307,5 +342,33 @@ mod tests {
             Some("owner/repo")
         );
         assert_eq!(parse_repository("https://gitlab.com/owner/repo.git"), None);
+    }
+
+    #[test]
+    fn normalizes_review_and_check_attention_without_user_content() {
+        let value = GhPullRequest {
+            number: 7,
+            title: "private title".to_owned(),
+            url: "https://github.com/owner/repo/pull/7".to_owned(),
+            is_draft: false,
+            merge_state_status: "CLEAN".to_owned(),
+            head_ref_name: "private-branch".to_owned(),
+            head_ref_oid: "sha".to_owned(),
+            base_ref_name: "main".to_owned(),
+            review_decision: "CHANGES_REQUESTED".to_owned(),
+            status_check_rollup: vec![GhCheck {
+                conclusion: "FAILURE".to_owned(),
+                status: "COMPLETED".to_owned(),
+                state: "".to_owned(),
+            }],
+            assignees: Vec::new(),
+            review_requests: Vec::new(),
+            author: None,
+        };
+
+        assert_eq!(
+            normalized_attention_state(&value, false, true),
+            "review=changesRequested|checks=failed"
+        );
     }
 }

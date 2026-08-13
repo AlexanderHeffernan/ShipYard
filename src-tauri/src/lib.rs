@@ -1,6 +1,7 @@
 mod agents;
 mod git;
 mod github;
+mod notifications;
 mod open;
 mod run;
 mod shipping;
@@ -91,6 +92,48 @@ async fn get_github_status() -> Result<github::GitHubStatus, String> {
     tauri::async_runtime::spawn_blocking(github::status)
         .await
         .map_err(|error| format!("GitHub status check failed: {error}"))
+}
+
+#[tauri::command]
+fn get_notification_settings(
+    app: tauri::AppHandle,
+) -> Result<notifications::NotificationSettings, String> {
+    notifications::load_settings(
+        &app.path()
+            .app_data_dir()
+            .map_err(|error| error.to_string())?,
+    )
+}
+
+#[tauri::command]
+fn save_notification_settings(
+    app: tauri::AppHandle,
+    settings: notifications::NotificationSettings,
+) -> Result<notifications::NotificationSettings, String> {
+    notifications::save_settings(
+        &app.path()
+            .app_data_dir()
+            .map_err(|error| error.to_string())?,
+        settings,
+    )
+}
+
+#[tauri::command]
+fn observe_pull_requests(
+    app: tauri::AppHandle,
+    projects: Vec<notifications::NotificationProject>,
+) -> Result<Vec<notifications::NotificationEvent>, String> {
+    notifications::observe(
+        &app.path()
+            .app_data_dir()
+            .map_err(|error| error.to_string())?,
+        projects,
+    )
+}
+
+#[tauri::command]
+fn open_notification_settings() -> Result<(), String> {
+    notifications::open_system_settings()
 }
 
 #[tauri::command]
@@ -242,6 +285,7 @@ pub fn run() {
         .manage(run::RunManager::default())
         .manage(watch::WatchManager::default())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -254,6 +298,10 @@ pub fn run() {
             inspect_work_item_deletion,
             delete_work_item,
             get_github_status,
+            get_notification_settings,
+            save_notification_settings,
+            observe_pull_requests,
+            open_notification_settings,
             get_open_settings,
             save_open_application,
             delete_open_application,

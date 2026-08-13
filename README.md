@@ -20,6 +20,36 @@ Shipyard currently detects and supports:
 
 Choose one preferred coding agent in the global Shipyard Settings modal. Agent use is automatic after selection.
 
+When an Amp thread creates work, Shipyard reads the `Amp-Thread-ID` Git trailer from the work item's
+commit history and adds **Open Amp thread** to the work item's Open menu. This keeps the link with the
+commits rather than depending on local app state. Amp projects also enable the trailer setting and
+`AGENTS.md` explains how agents should preserve it when committing manually.
+
+## Notifications
+
+Open **Shipyard Settings → Notifications** to opt into macOS system notifications. Both rules are
+off by default and are independent:
+
+- **New pull requests** alerts once when a pull request first appears in a project.
+- **Pull request updates** alerts when the head commit, draft state, review/check state, merge
+  state, or target branch changes. Repeated polls of the same revision do not alert.
+
+The first scan establishes a quiet baseline. A material update is a change to the head SHA, draft
+flag, normalized review/check attention state, merge state, or base branch; changes within the same
+state (for example, another poll of a still-failing check) are not separate events. Shipyard
+persists notification settings in `notifications/settings.json` and observed project/PR identity,
+material revision, presence, and last event state in `notifications/observed.json` under the app data
+directory. A PR that disappears from a poll and later reappears is treated as a new appearance.
+Transient project/GitHub scan failures do not count as disappearance, so recovery does not create a
+false "new" event.
+Notification payloads contain only a sanitized project name and pull-request number; titles,
+branches, paths, commit messages, and review text are not included.
+
+Enabling either rule requests macOS notification permission. If permission is denied, the settings
+screen links to **System Settings → Notifications → Shipyard** and keeps the rule disabled until
+permission is available. New installs and missing settings fields default to off; a legacy explicit
+global `enabled: true` choice is migrated to both independently editable rules.
+
 ## Development
 
 ```sh

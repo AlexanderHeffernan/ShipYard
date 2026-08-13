@@ -7,9 +7,12 @@ import AppSidebar from './components/sidebar/AppSidebar.vue';
 import ProjectSwitcher from './components/sidebar/ProjectSwitcher.vue';
 import ConfirmationDialog from './components/ui/ConfirmationDialog.vue';
 import { useProjects } from './composables/useProjects';
+import { useNotifications } from './composables/useNotifications';
 import { useUpdates } from './composables/useUpdates';
+import { useWindowFullscreen } from './composables/useWindowFullscreen';
 import { deleteWorkItem, inspectWorkItemDeletion } from './services/projects';
 import type { DeleteWorkItemRequest, DeletionPlan, Project, WorkItem } from './types/projects';
+import { titlebarControlsInset } from './utils/titlebar';
 
 const sidebarOpen = ref(true);
 const sidebarWidth = ref(288);
@@ -17,6 +20,7 @@ const selectedWorkItemId = ref<string | null>(null);
 const settingsProject = ref<Project | null>(null);
 const settingsSection = ref<'open' | 'run'>('run');
 const appSettingsOpen = ref(false);
+const notificationsReady = ref(false);
 const deletion = ref<{
   project: Project;
   item: WorkItem;
@@ -31,13 +35,16 @@ const {
   loading,
   error,
   loadProjects,
+  refreshAllProjects,
   addProject,
   rescanProject,
   removeProject,
   updateProjectIdentity,
   disposeProjects,
 } = useProjects();
+const notifications = useNotifications();
 const { startAutomaticChecks, stopAutomaticChecks } = useUpdates();
+const { isFullscreen, fullscreenStateReady } = useWindowFullscreen();
 const selection = computed(() => {
   for (const project of projects.value) {
     const workItem = project.workItems.find((item) => item.id === selectedWorkItemId.value);
@@ -46,14 +53,26 @@ const selection = computed(() => {
   return null;
 });
 
+async function initializeApp() {
+  await loadProjects();
+  await notifications.loadSettings();
+  notificationsReady.value = true;
+  await notifications.observeProjects(projects.value);
+  notifications.startPolling(refreshAllProjects);
+}
+
 onMounted(() => {
-  void loadProjects();
+  void initializeApp();
   startAutomaticChecks();
 });
 onBeforeUnmount(() => {
   disposeProjects();
+  notifications.stopPolling();
   stopAutomaticChecks();
 });
+watch(projects, (value) => {
+  if (notificationsReady.value) void notifications.observeProjects(value);
+}, { deep: true });
 watch(selection, (current) => {
   if (selectedWorkItemId.value && !current) selectedWorkItemId.value = null;
 });
@@ -138,10 +157,14 @@ const deletionConfirmLabel = computed(() => {
 </script>
 
 <template>
-  <div class="app-shell">
+  <div
+    class="app-shell"
+    :style="{ '--titlebar-controls-leading-inset': `${titlebarControlsInset(isFullscreen)}px` }"
+    :data-window-fullscreen="isFullscreen ? 'true' : 'false'"
+  >
     <header class="window-drag-region" data-tauri-drag-region></header>
 
-    <div class="titlebar-controls">
+    <div v-if="fullscreenStateReady" class="titlebar-controls">
       <button
         class="sidebar-toggle"
         type="button"
@@ -182,6 +205,7 @@ const deletionConfirmLabel = computed(() => {
         :project="selection?.project ?? null"
         :work-item="selection?.workItem ?? null"
         :sidebar-open="sidebarOpen"
+        :fullscreen="isFullscreen"
         @settings="openSettings"
         @refresh="rescanProject"
       />
@@ -258,7 +282,7 @@ const deletionConfirmLabel = computed(() => {
   position: fixed;
   z-index: 4;
   top: 4px;
-  left: 82px;
+  left: var(--titlebar-controls-leading-inset);
   display: flex;
   align-items: center;
   gap: 4px;
