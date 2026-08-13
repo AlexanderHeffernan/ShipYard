@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { Check, X } from '@lucide/vue';
 import { computed, onBeforeUnmount, onMounted, ref, useId } from 'vue';
-import shipyardIcon from '../../assets/shipyard-icon.png';
+import shipyardSunsetBackground from '../../assets/shipyard-sunset-background.png';
+import shipyardSunsetBoat from '../../assets/shipyard-sunset-boat.png';
 import {
   completionAnimationSpeedMultiplier,
   isFullScreenCompletionAnimation,
@@ -226,9 +227,9 @@ onBeforeUnmount(() => {
       </template>
 
       <template v-else-if="animation === 'shipyard-sunset'">
-        <div class="shipyard-sunset__glow"></div>
-        <div class="shipyard-sunset__stage">
-          <img class="shipyard-sunset__logo" :src="shipyardIcon" alt="" draggable="false" />
+        <div class="shipyard-sunset__canvas">
+          <img class="shipyard-sunset__background" :src="shipyardSunsetBackground" alt="" draggable="false" />
+          <img class="shipyard-sunset__boat" :src="shipyardSunsetBoat" alt="" draggable="false" />
         </div>
       </template>
 
@@ -783,54 +784,45 @@ onBeforeUnmount(() => {
 .quiet-handoff__line--two { top: 58%; animation-delay: 260ms; opacity: 0.5; }
 
 
-/* Shipyard sunset — the supplied ShipYard mark is the artwork, not an approximation. */
-.shipyard-sunset__glow {
+/* Shipyard sunset — authored background and boat layers keep the artwork exact while the boat recedes. */
+.shipyard-sunset__canvas {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  width: min(82vw, 760px);
-  aspect-ratio: 1;
-  background: radial-gradient(circle at 50% 43%, rgba(255, 137, 39, 0.28), rgba(174, 40, 76, 0.12) 38%, transparent 68%);
-  border-radius: 50%;
-  filter: blur(18px);
-  opacity: 0;
-  transform: translate(-50%, -50%) scale(0.92);
-  animation: shipyard-sunset-glow 4400ms 80ms ease-out both;
-}
-
-.shipyard-sunset__stage {
-  position: absolute;
-  z-index: 1;
   inset: 0;
-  display: grid;
-  place-items: center;
+  overflow: hidden;
 }
 
-.shipyard-sunset__logo {
-  display: block;
-  width: min(78vw, 680px);
-  max-height: 78vh;
-  object-fit: contain;
-  filter: drop-shadow(0 22px 42px rgba(6, 3, 15, 0.34));
-  opacity: 0;
-  transform-origin: 50% 43%;
-  animation: shipyard-sunset-logo-depart 4400ms 120ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+.shipyard-sunset__background {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
   user-select: none;
 }
 
-@keyframes shipyard-sunset-glow {
-  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
-  18% { opacity: 0.84; transform: translate(-50%, -50%) scale(1); }
-  76% { opacity: 0.72; transform: translate(-50%, -50%) scale(1.02); }
-  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.08); }
+.shipyard-sunset__boat {
+  position: absolute;
+  /* Align the authored hull with the background waterline at the native desktop size. */
+  top: max(7.23vw, 12.85vh);
+  left: 50%;
+  width: max(59.57vw, 105.9vh);
+  max-width: none;
+  height: auto;
+  overflow: visible;
+  transform: translateX(-50%) translateY(0) scale(1);
+  transform-origin: 50% 92%;
+  animation: shipyard-sunset-boat-depart 4400ms 120ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+  opacity: 1;
+  user-select: none;
 }
 
-@keyframes shipyard-sunset-logo-depart {
-  0% { opacity: 0; transform: scale(0.94); }
-  14% { opacity: 1; transform: scale(1); }
-  60% { opacity: 1; transform: scale(0.97); }
-  82% { opacity: 0.76; transform: scale(0.84); }
-  100% { opacity: 0; transform: scale(0.68); }
+@keyframes shipyard-sunset-boat-depart {
+  /* Keep the hull pinned to the waterline: only scale changes, so it never appears to fly. */
+  0% { opacity: 1; transform: translateX(-50%) translateY(0) scale(0.98); }
+  13% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+  54% { opacity: 1; transform: translateX(-50%) translateY(0) scale(0.93); }
+  76% { opacity: 1; transform: translateX(-50%) translateY(0) scale(0.63); }
+  100% { opacity: 1; transform: translateX(-50%) translateY(0) scale(0.02); }
 }
 
 /* Sail away — a direct ShipYard/boat nod. */
