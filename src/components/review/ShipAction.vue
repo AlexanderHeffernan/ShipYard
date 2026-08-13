@@ -18,6 +18,19 @@ const needsUpdate = computed(() => !!syncState.value && syncState.value !== 'syn
 const blocked = computed(() => !!props.workItem.pullRequest && !needsUpdate.value && ['checksPending', 'checksFailed', 'reviewRequired', 'draft'].includes(props.workItem.pullRequest.mergeState));
 const canResolveWithoutMerging = computed(() => props.workItem.pullRequest?.mergeState === 'conflicting' && !needsUpdate.value);
 const hasMenu = computed(() => !props.workItem.pullRequest || props.workItem.pullRequest.mergeState === 'conflicting');
+const unavailableReason = computed(() => {
+  if (!props.project.defaultBranch || !props.project.githubRepository) return 'GitHub connection is required to ship this work';
+  if (!props.workItem.pullRequest) {
+    return !props.workItem.branch || !props.workItem.worktreePath
+      ? 'A checked-out local branch is required to create a pull request'
+      : null;
+  }
+  if (needsUpdate.value) {
+    if (!props.workItem.worktreePath) return 'A local checkout is required to update this pull request';
+    if (!props.workItem.pullRequest.headBranch) return 'The pull request source branch is unavailable';
+  }
+  return null;
+});
 const primaryLabel = computed(() => {
   if (active.value && currentRun.value?.status === 'stopping') return 'Stopping…';
   if (active.value) return 'Stop';
@@ -34,10 +47,7 @@ const primaryLabel = computed(() => {
   return 'Merge PR';
 });
 const unavailable = computed(() => {
-  if (!props.project.defaultBranch || !props.project.githubRepository) return true;
-  if (!props.workItem.pullRequest) return !props.workItem.branch || !props.workItem.worktreePath;
-  if (!needsUpdate.value) return false;
-  return !props.workItem.branch || !props.workItem.worktreePath;
+  return !!unavailableReason.value;
 });
 
 async function primary() {
@@ -79,7 +89,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeMenu));
 
 <template>
   <div ref="root" class="ship-control">
-    <button class="ship-control__main" :class="{ 'ship-control__main--single': !hasMenu }" type="button" :disabled="anotherRunActive || blocked || unavailable" :title="unavailable ? (needsUpdate ? 'A checked-out local branch is required to update this pull request' : 'GitHub connection is required to ship this work') : primaryLabel" @click="primary">
+    <button class="ship-control__main" :class="{ 'ship-control__main--single': !hasMenu }" type="button" :disabled="anotherRunActive || blocked || unavailable" :title="unavailable ? unavailableReason ?? primaryLabel : primaryLabel" @click="primary">
       <svg viewBox="0 0 16 16" aria-hidden="true"><path v-if="active" d="M4.5 4.5h7v7h-7z"/><path v-else d="M2.5 9.5h11l-2 3h-7l-2-3Zm3-1V3.5l5 2.5-5 2.5Z"/></svg>
       <span>{{ primaryLabel }}</span>
     </button>

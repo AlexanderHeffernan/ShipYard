@@ -111,7 +111,13 @@ fn branch_item(
         .transpose()?
         .unwrap_or_default();
     Ok(Some(branch_work_item(
-        root, project_id, branch, worktree, stats, status, ahead, behind,
+        root,
+        project_id,
+        branch,
+        worktree,
+        stats,
+        status,
+        (ahead, behind),
     )))
 }
 
@@ -153,8 +159,7 @@ fn branch_work_item(
     worktree: Option<&Worktree>,
     stats: DiffStats,
     status: WorkStatus,
-    ahead: u32,
-    behind: u32,
+    (ahead, behind): (u32, u32),
 ) -> WorkItem {
     let agent_thread_url = references::agent_thread_url(root, &branch.reference);
     WorkItem {
@@ -162,6 +167,7 @@ fn branch_work_item(
         project_id: project_id.to_owned(),
         branch: Some(branch.name),
         worktree_path: worktree.map(|item| repository::path_string(&item.path)),
+        pull_request_number: worktree.and_then(|item| item.pull_request_number),
         head_sha: branch.sha,
         agent_thread_url,
         last_commit_subject: branch.subject,
@@ -214,6 +220,7 @@ fn unborn_item(project_id: &str, worktree: &Worktree) -> Result<Option<WorkItem>
         project_id: project_id.to_owned(),
         branch: Some(short_branch_name(branch_ref)),
         worktree_path: Some(repository::path_string(&worktree.path)),
+        pull_request_number: worktree.pull_request_number,
         head_sha: worktree.sha.clone(),
         agent_thread_url: None,
         last_commit_subject: String::new(),
@@ -271,6 +278,7 @@ fn detached_item(
         project_id: project_id.to_owned(),
         branch: None,
         worktree_path: Some(repository::path_string(&worktree.path)),
+        pull_request_number: worktree.pull_request_number,
         head_sha: worktree.sha.clone(),
         agent_thread_url: references::agent_thread_url(root, &worktree.sha),
         last_commit_subject: subject,

@@ -63,6 +63,7 @@ async function runSelected(script: RunScript) {
       projectPath: props.project.path,
       pullRequestNumber: pullRequest.number,
       headSha: pullRequest.headSha,
+      headBranch: pullRequest.headBranch,
     })
     : { worktreePath: props.workItem.worktreePath };
   await run(props.project.id, script, checkout.worktreePath);

@@ -20,6 +20,7 @@ export type CheckoutPullRequestRequest = {
   projectPath: string;
   pullRequestNumber: number;
   headSha: string;
+  headBranch: string;
 };
 
 export type WorkItem = {

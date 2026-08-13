@@ -17,6 +17,7 @@ pub(crate) struct ShippingRequest {
     _work_item_id: String,
     source_path: String,
     source_branch: Option<String>,
+    pull_request_head_branch: Option<String>,
     default_branch: String,
     github_repository: String,
     action: ShippingAction,
@@ -51,7 +52,7 @@ fn prepare_with_adapter(
 ) -> Result<PreparedShipping, String> {
     let source = git::validate_worktree(&request.project_id, &request.source_path)?;
     let primary_checkout = git::primary_worktree_path(&source)?;
-    let branch = request.source_branch.as_deref();
+    let branch = target_branch(&request).map(str::to_owned);
     if !matches!(
         request.action,
         ShippingAction::MergePullRequest | ShippingAction::ResolvePullRequest
@@ -59,7 +60,7 @@ fn prepare_with_adapter(
     {
         return Err("Create a branch before shipping this work".to_owned());
     }
-    if branch == Some(request.default_branch.as_str()) {
+    if branch.as_deref() == Some(request.default_branch.as_str()) {
         return Err("Work on the default branch cannot be shipped as a pull request".to_owned());
     }
     if request.github_repository.split('/').count() != 2 {
@@ -85,9 +86,11 @@ fn prepare_with_adapter(
     let resolution_path = base.join("resolutions").join(&operation_id);
     let shipped_commit_path = operation_dir.join("shipped-commit.txt");
     let managed_checkout = matches!(request.action, ShippingAction::MergePullRequest)
-        .then(|| request.pull_request_number.map(|number| {
-            git::managed_pull_request_checkout_path(base, &request.project_id, number)
-        }))
+        .then(|| {
+            request.pull_request_number.map(|number| {
+                git::managed_pull_request_checkout_path(base, &request.project_id, number)
+            })
+        })
         .flatten();
     let script = script(
         &request,
@@ -120,6 +123,13 @@ fn prepare_with_adapter(
     })
 }
 
+fn target_branch(request: &ShippingRequest) -> Option<&str> {
+    request
+        .source_branch
+        .as_deref()
+        .or(request.pull_request_head_branch.as_deref())
+}
+
 pub(crate) fn cleanup_after_success(cleanup: &ShippingCleanup) -> Result<String, String> {
     cleanup::after_success(cleanup)
 }
@@ -132,7 +142,7 @@ fn metadata_prompt_text(request: &ShippingRequest) -> String {
     format!(
         "Inspect the work in this repository relative to origin/{base}. Return ONLY one JSON object with exactly these string fields: commitSubject, commitBody, pullRequestTitle, pullRequestBody. Describe the intent and user-visible effect accurately. Do not edit files, run destructive commands, commit, or push. Do not use Markdown fences. The branch is {branch}.",
         base = request.default_branch,
-        branch = request.source_branch.as_deref().unwrap_or_default(),
+        branch = target_branch(request).unwrap_or_default(),
     )
 }
 
@@ -140,7 +150,7 @@ fn conflict_prompt_text(request: &ShippingRequest) -> String {
     format!(
         "Resolve the current Git merge conflicts while bringing branch {branch} up to date with its remote work and origin/{base}. Inspect both sides and preserve their intended behavior. Edit only what is needed to resolve the merge. Run focused checks when useful. Do not commit, push, rebase, switch branches, or abort the merge. Finish only when every conflict is resolved and staged or ready to stage.",
         base = request.default_branch,
-        branch = request.source_branch.as_deref().unwrap_or_default(),
+        branch = target_branch(request).unwrap_or_default(),
     )
 }
 
@@ -156,7 +166,7 @@ fn script(
     primary_checkout: &Path,
     managed_checkout: Option<&Path>,
 ) -> Result<String, String> {
-    let branch = request.source_branch.as_deref().unwrap_or_default();
+    let branch = target_branch(request).unwrap_or_default();
     let metadata_command = agent_command(
         adapter.executable(),
         &adapter.metadata_args(),
@@ -208,10 +218,13 @@ integrate_target() {{
     GIT_EDITOR=true git -C "$resolution" commit --no-edit
   fi
   RESOLVED_SHA="$(git -C "$resolution" rev-parse HEAD)"
-  if [[ "$(git -C "$source" branch --show-current)" == "$branch" ]] &&
-     [[ "$(git -C "$source" rev-parse HEAD)" == "$source_sha" ]] &&
+  if [[ "$(git -C "$source" rev-parse HEAD)" == "$source_sha" ]] &&
      [[ -z "$(git -C "$source" status --porcelain --untracked-files=normal)" ]]; then
-    git -C "$source" merge --ff-only "$RESOLVED_SHA"
+    if [[ "$(git -C "$source" branch --show-current)" == "$branch" ]]; then
+      git -C "$source" merge --ff-only "$RESOLVED_SHA"
+    elif [[ -z "$(git -C "$source" branch --show-current)" ]]; then
+      git -C "$source" reset --hard "$RESOLVED_SHA"
+    fi
   fi
   git -C "$source" worktree remove "$resolution"
   echo "Shipyard · remote work integrated"
@@ -223,16 +236,17 @@ integrate_target() {{
         repository = shell_text(&request.github_repository),
         resolution = shell(resolution_path),
         primary_checkout = shell(primary_checkout),
-        managed_checkout = managed_checkout.map(shell).unwrap_or_else(|| "''".to_owned()),
+        managed_checkout = managed_checkout
+            .map(shell)
+            .unwrap_or_else(|| "''".to_owned()),
         agent_label = adapter.label(),
         conflict_command = conflict_command,
-        checkout_guard = if matches!(
-            request.action,
-            ShippingAction::MergePullRequest | ShippingAction::ResolvePullRequest
-        ) {
-            ":"
-        } else {
-            "[[ \"$(git -C \"$source\" branch --show-current)\" == \"$branch\" ]]"
+        checkout_guard = match request.action {
+            ShippingAction::MergePullRequest | ShippingAction::ResolvePullRequest => ":",
+            ShippingAction::UpdatePullRequest if request.source_branch.is_none() => {
+                "[[ -z \"$(git -C \"$source\" branch --show-current)\" ]]"
+            }
+            _ => "[[ \"$(git -C \"$source\" branch --show-current)\" == \"$branch\" ]]",
         },
     );
 
@@ -356,7 +370,7 @@ fi
 {after_resolution}
 "#,
                 after_resolution = after_resolution,
-                local_guard = request.source_branch.as_deref().map(|branch| format!(
+                local_guard = target_branch(request).map(|branch| format!(
                     r#"branch={branch}
 git -C "$source" fetch origin "$base" "$branch"
 current_branch="$(git -C "$source" branch --show-current)"
@@ -391,7 +405,7 @@ echo "Shipyard · pull request created"
             body = shell(&pr_body),
         ),
         ShippingAction::UpdatePullRequest => r#"
-git -C "$source" push origin "HEAD:$branch"
+git -C "$source" push origin "${source_sha}:refs/heads/${branch}"
 echo "Shipyard · pull request updated"
 "#
         .to_owned(),
@@ -522,6 +536,7 @@ mod tests {
                 _work_item_id: "test-item".into(),
                 source_path: checkout.to_string_lossy().into_owned(),
                 source_branch: Some("feature/test".into()),
+                pull_request_head_branch: None,
                 default_branch: "main".into(),
                 github_repository: "owner/repo".into(),
                 action: ShippingAction::DirectToMain,
@@ -606,6 +621,7 @@ mod tests {
                 _work_item_id: "test-item".into(),
                 source_path: checkout.to_string_lossy().into_owned(),
                 source_branch: Some("feature/update".into()),
+                pull_request_head_branch: Some("feature/update".into()),
                 default_branch: "main".into(),
                 github_repository: "owner/repo".into(),
                 action: ShippingAction::MergePullRequest,
@@ -632,6 +648,7 @@ mod tests {
                 _work_item_id: "test-item".into(),
                 source_path: checkout.to_string_lossy().into_owned(),
                 source_branch: Some("feature/update".into()),
+                pull_request_head_branch: Some("feature/update".into()),
                 default_branch: "main".into(),
                 github_repository: "owner/repo".into(),
                 action: ShippingAction::UpdatePullRequest,
@@ -660,6 +677,103 @@ mod tests {
         assert_eq!(
             text(&checkout, &["show", "-s", "--format=%s", "HEAD"]),
             "Ship work"
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn updating_a_detached_pull_request_checkout_commits_and_pushes_local_work() {
+        let root = temporary("update-detached-pr");
+        let remote = root.join("remote.git");
+        let checkout = root.join("checkout");
+        let detached = root.join("detached");
+        let data = root.join("data");
+        run(&root, &["init", "--bare", remote.to_str().unwrap()]);
+        run(
+            &root,
+            &[
+                "clone",
+                remote.to_str().unwrap(),
+                checkout.to_str().unwrap(),
+            ],
+        );
+        run(&checkout, &["switch", "-c", "main"]);
+        run(&checkout, &["config", "user.name", "ShipYard Test"]);
+        run(
+            &checkout,
+            &["config", "user.email", "shipyard@example.test"],
+        );
+        fs::write(checkout.join("README.md"), "initial\n").unwrap();
+        run(&checkout, &["add", "."]);
+        run(&checkout, &["commit", "-m", "Initial"]);
+        run(&checkout, &["push", "-u", "origin", "main"]);
+        run(&checkout, &["switch", "-c", "feature/detached"]);
+        fs::write(checkout.join("feature.txt"), "first version\n").unwrap();
+        run(&checkout, &["add", "."]);
+        run(&checkout, &["commit", "-m", "Start feature"]);
+        run(&checkout, &["push", "-u", "origin", "feature/detached"]);
+        let previous_pull_request_head = text(&checkout, &["rev-parse", "origin/feature/detached"]);
+        run(&checkout, &["switch", "main"]);
+        run(
+            &checkout,
+            &[
+                "worktree",
+                "add",
+                "--detach",
+                detached.to_str().unwrap(),
+                &previous_pull_request_head,
+            ],
+        );
+        fs::write(detached.join("feature.txt"), "updated locally\n").unwrap();
+
+        let project_id = crate::git::resolve(checkout.to_str().unwrap())
+            .unwrap()
+            .1
+            .to_string_lossy()
+            .into_owned();
+        let adapter = test_adapter(&root);
+        let prepared = prepare_with_adapter(
+            &data,
+            ShippingRequest {
+                project_id,
+                _work_item_id: "detached-item".into(),
+                source_path: detached.to_string_lossy().into_owned(),
+                source_branch: None,
+                pull_request_head_branch: Some("feature/detached".into()),
+                default_branch: "main".into(),
+                github_repository: "owner/repo".into(),
+                action: ShippingAction::UpdatePullRequest,
+                pull_request_number: Some(1),
+            },
+            &adapter,
+        )
+        .unwrap();
+        let output = Command::new("/bin/zsh")
+            .arg(&prepared.script_path)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        run(&checkout, &["fetch", "origin", "feature/detached"]);
+        let updated_pull_request_head = text(&checkout, &["rev-parse", "origin/feature/detached"]);
+        assert_ne!(previous_pull_request_head, updated_pull_request_head);
+        assert_eq!(
+            updated_pull_request_head,
+            text(&detached, &["rev-parse", "HEAD"])
+        );
+        assert_eq!(text(&detached, &["branch", "--show-current"]), "");
+        assert_eq!(text(&detached, &["status", "--porcelain"]), "");
+        assert_eq!(
+            text(&detached, &["show", "-s", "--format=%s", "HEAD"]),
+            "Ship work"
+        );
+        run(
+            &checkout,
+            &["worktree", "remove", "--force", detached.to_str().unwrap()],
         );
         fs::remove_dir_all(root).unwrap();
     }
@@ -728,7 +842,8 @@ mod tests {
                 project_id: project_id.clone(),
                 _work_item_id: "remote-pr".into(),
                 source_path: checkout.to_string_lossy().into_owned(),
-                source_branch: Some("feature/remote".into()),
+                source_branch: None,
+                pull_request_head_branch: Some("feature/remote".into()),
                 default_branch: "main".into(),
                 github_repository: "owner/repo".into(),
                 action: ShippingAction::ResolvePullRequest,
@@ -751,19 +866,15 @@ mod tests {
             String::from_utf8_lossy(&output.stdout),
             String::from_utf8_lossy(&output.stderr)
         );
-        assert!(
-            String::from_utf8_lossy(&output.stdout)
-                .contains("Shipyard · resolving automatically with Test agent")
-        );
         assert!(String::from_utf8_lossy(&output.stdout)
-            .contains("pull request left open for review"));
+            .contains("Shipyard · resolving automatically with Test agent"));
+        assert!(
+            String::from_utf8_lossy(&output.stdout).contains("pull request left open for review")
+        );
         assert!(!gh_output.exists());
         run(&checkout, &["fetch", "origin", "feature/remote"]);
         assert_eq!(
-            text(
-                &checkout,
-                &["show", "origin/feature/remote:conflict.txt"]
-            ),
+            text(&checkout, &["show", "origin/feature/remote:conflict.txt"]),
             "resolved"
         );
         assert_eq!(
@@ -782,7 +893,8 @@ mod tests {
                 project_id,
                 _work_item_id: "remote-pr".into(),
                 source_path: checkout.to_string_lossy().into_owned(),
-                source_branch: Some("feature/remote".into()),
+                source_branch: None,
+                pull_request_head_branch: Some("feature/remote".into()),
                 default_branch: "main".into(),
                 github_repository: "owner/repo".into(),
                 action: ShippingAction::MergePullRequest,
