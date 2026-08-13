@@ -150,7 +150,6 @@ onBeforeUnmount(() => {
               :default-color="projectDefaultColor(project.id)"
               @color="updateIdentity(project.id, { color: $event })"
               @image="updateIdentity(project.id, { image: $event })"
-              @close="closeIdentity"
             />
 
             <AppButton

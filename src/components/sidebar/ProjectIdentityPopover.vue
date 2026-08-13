@@ -1,12 +1,8 @@
 <script setup lang="ts">
-import { CircleAlert, Check, Image as ImageIcon, ImagePlus, Palette, RotateCcw, Trash2, Upload, X } from '@lucide/vue';
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { CircleAlert, Image as ImageIcon, ImagePlus, Palette, Trash2, Upload } from '@lucide/vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import type { Project, ProjectImage } from '../../types/projects';
-import {
-  MAX_PROJECT_IMAGE_BYTES,
-  normalizeHexColor,
-  PROJECT_COLOR_PRESETS,
-} from '../../utils/projectIdentity';
+import { MAX_PROJECT_IMAGE_BYTES, normalizeHexColor } from '../../utils/projectIdentity';
 
 type IdentityTab = 'color' | 'image';
 
@@ -34,7 +30,6 @@ const props = defineProps<{
 const emit = defineEmits<{
   color: [value: string | null];
   image: [value: ProjectImage | null];
-  close: [];
 }>();
 
 const panel = ref<HTMLElement>();
@@ -46,12 +41,6 @@ const imageBusy = ref(false);
 const imagePreviewFailed = ref(false);
 
 const popoverId = computed(() => `project-identity-${props.project.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`);
-const selectedPreset = computed(() => PROJECT_COLOR_PRESETS.find((preset) => preset.value === props.project.colorOverride));
-const customColorSelected = computed(() => !!props.project.colorOverride && !selectedPreset.value);
-const selectedLabel = computed(() => {
-  if (!props.project.colorOverride) return 'Generated color';
-  return selectedPreset.value?.name ?? 'Custom color';
-});
 const imageName = computed(() => props.project.image?.name ?? 'No image selected');
 const imageSize = computed(() => (props.project.image ? formatBytes(props.project.image.size) : ''));
 
@@ -198,10 +187,6 @@ function removeImage() {
   imagePreviewFailed.value = false;
   emit('image', null);
 }
-
-onMounted(() => {
-  nextTick(() => panel.value?.querySelector<HTMLElement>('[data-identity-tab="color"]')?.focus());
-});
 </script>
 
 <template>
@@ -212,16 +197,6 @@ onMounted(() => {
     role="dialog"
     :aria-label="`Customize ${project.name}`"
   >
-    <header class="identity-popover__header">
-      <div>
-        <span class="identity-popover__eyebrow">Project identity</span>
-        <h2>Make it yours</h2>
-      </div>
-      <button class="identity-popover__close" type="button" aria-label="Close project identity" @click="emit('close')">
-        <X aria-hidden="true" />
-      </button>
-    </header>
-
     <div class="identity-tabs" role="tablist" aria-label="Project identity options" @keydown="moveTab">
       <button
         data-identity-tab="color"
@@ -256,47 +231,14 @@ onMounted(() => {
       :id="`${popoverId}-color-panel`"
       :aria-labelledby="`${popoverId}-color-tab`"
     >
-      <div class="identity-panel__intro">
+      <div class="identity-color__intro">
         <div>
           <strong>Choose a color</strong>
-          <span>Used throughout Shipyard for this project.</span>
+          <span>{{ project.colorOverride ? 'Custom project color' : 'Generated default' }}</span>
         </div>
-        <span class="identity-selection" :title="selectedLabel">
-          <span class="identity-selection__swatch" :style="{ background: project.color }"></span>
-          {{ selectedLabel }}
-        </span>
       </div>
 
-      <div class="color-grid" aria-label="Color choices">
-        <button
-          class="color-choice color-choice--default"
-          type="button"
-          :aria-pressed="project.colorOverride === null"
-          :title="`Use generated ${defaultColor} color`"
-          @click="chooseColor(null)"
-        >
-          <span class="color-choice__swatch" :style="{ background: defaultColor }"><RotateCcw aria-hidden="true" /></span>
-          <span>Generated</span>
-          <Check v-if="project.colorOverride === null" class="color-choice__check" aria-hidden="true" />
-        </button>
-
-        <button
-          v-for="preset in PROJECT_COLOR_PRESETS"
-          :key="preset.value"
-          class="color-choice"
-          type="button"
-          :aria-label="preset.name"
-          :aria-pressed="project.colorOverride === preset.value"
-          :title="preset.name"
-          @click="chooseColor(preset.value)"
-        >
-          <span class="color-choice__swatch" :style="{ background: preset.value }"></span>
-          <span>{{ preset.name }}</span>
-          <Check v-if="project.colorOverride === preset.value" class="color-choice__check" aria-hidden="true" />
-        </button>
-      </div>
-
-      <label class="custom-color-choice" :class="{ 'custom-color-choice--selected': customColorSelected }">
+      <label class="custom-color-choice">
         <span class="custom-color-choice__input" :style="{ background: customColor }">
           <input
             type="color"
@@ -306,11 +248,19 @@ onMounted(() => {
           />
         </span>
         <span class="custom-color-choice__copy">
-          <strong>Custom color</strong>
+          <strong>Project color</strong>
           <small>{{ customColor.toUpperCase() }}</small>
         </span>
-        <Check v-if="customColorSelected" class="color-choice__check" aria-hidden="true" />
       </label>
+
+      <button
+        v-if="project.colorOverride"
+        class="identity-color__reset"
+        type="button"
+        @click="chooseColor(null)"
+      >
+        Use generated default · {{ defaultColor.toUpperCase() }}
+      </button>
     </div>
 
     <div
@@ -368,7 +318,6 @@ onMounted(() => {
       <p class="identity-image__hint">PNG, JPG, GIF, WebP, or AVIF · Up to 2 MB</p>
     </div>
 
-    <footer class="identity-popover__footer">Changes are saved to this project automatically.</footer>
   </section>
 </template>
 
@@ -381,59 +330,12 @@ onMounted(() => {
   width: 306px;
   overflow: hidden;
   color: var(--text-primary);
-  background: linear-gradient(145deg, rgba(38, 23, 42, 0.99), rgba(24, 18, 31, 0.99));
-  border: 1px solid rgba(251, 119, 31, 0.32);
-  border-radius: 13px;
-  box-shadow: 0 20px 46px rgba(5, 3, 8, 0.54), 0 0 0 1px rgba(255, 255, 255, 0.025) inset;
+  background: var(--surface-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  box-shadow: var(--shadow-elevated);
   transform-origin: top left;
   animation: identity-popover-in 130ms cubic-bezier(0.2, 0.75, 0.25, 1);
-}
-
-.identity-popover__header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  padding: 16px 16px 13px;
-  background: linear-gradient(115deg, rgba(251, 119, 31, 0.13), transparent 62%);
-}
-
-.identity-popover__eyebrow {
-  display: block;
-  margin-bottom: 4px;
-  font-size: 9px;
-  font-weight: 650;
-  color: var(--primary-hover);
-  text-transform: uppercase;
-  letter-spacing: 0.11em;
-}
-
-.identity-popover__header h2 {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
-
-.identity-popover__close {
-  display: grid;
-  width: 25px;
-  height: 25px;
-  padding: 0;
-  place-items: center;
-  color: var(--text-secondary);
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 7px;
-}
-
-.identity-popover__close:hover {
-  color: var(--text-primary);
-  background: var(--surface-hover);
-}
-
-.identity-popover__close svg {
-  width: 14px;
-  height: 14px;
 }
 
 .identity-tabs {
@@ -480,146 +382,79 @@ onMounted(() => {
 }
 
 .identity-tab-panel {
-  min-height: 244px;
   padding: 15px 16px 14px;
 }
 
-.identity-panel__intro {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 14px;
+.identity-tab-panel--color {
+  min-height: 168px;
 }
 
-.identity-panel__intro strong,
+.identity-tab-panel--image {
+  min-height: 244px;
+}
+
+.identity-color__intro {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.identity-color__intro strong,
 .custom-color-choice__copy strong {
   display: block;
   font-size: 12px;
   font-weight: 550;
 }
 
-.identity-panel__intro > div > span {
+.identity-color__intro span {
   display: block;
   margin-top: 4px;
   font-size: 10px;
   color: var(--text-secondary);
 }
-
-.identity-selection {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 5px;
-  max-width: 108px;
-  overflow: hidden;
-  font-size: 9px;
-  color: var(--text-secondary);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.identity-selection__swatch {
-  flex: 0 0 auto;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.3);
-}
-
-.color-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 5px;
-}
-
-.color-choice,
-.custom-color-choice {
-  position: relative;
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 7px;
-  height: 35px;
-  padding: 0 7px;
-  overflow: hidden;
-  font: inherit;
-  font-size: 10px;
-  color: var(--text-secondary);
-  text-align: left;
-  background: rgba(255, 255, 255, 0.025);
-  border: 1px solid transparent;
-  border-radius: 7px;
-  transition: background 100ms ease, border-color 100ms ease, color 100ms ease;
-}
-
-.color-choice:hover,
-.custom-color-choice:hover {
-  color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.07);
-}
-
-.color-choice[aria-pressed='true'],
-.custom-color-choice--selected {
-  color: var(--text-primary);
-  background: var(--primary-subtle);
-  border-color: var(--primary-border);
-}
-
-.color-choice:focus-visible,
 .custom-color-choice:focus-within,
+.identity-color__reset:focus-visible,
 .identity-image__actions button:focus-visible,
 .identity-image__empty button:focus-visible,
 .identity-image__remove-failed:focus-visible,
-.identity-popover__close:focus-visible,
 .identity-tabs button:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 1px;
 }
 
-.color-choice__swatch,
 .custom-color-choice__input {
   display: grid;
   flex: 0 0 auto;
-  width: 17px;
-  height: 17px;
   place-items: center;
   border-radius: 50%;
   box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.32);
 }
 
-.color-choice__swatch svg {
-  width: 10px;
-  height: 10px;
-  color: rgba(255, 255, 255, 0.76);
-  stroke-width: 1.7;
-}
-
-.color-choice > span:not(.color-choice__swatch) {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.color-choice__check {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 11px;
-  height: 11px;
-  color: var(--primary-hover);
-  stroke-width: 2.3;
-}
-
 .custom-color-choice {
+  display: flex;
+  align-items: center;
+  gap: 9px;
   width: 100%;
-  margin-top: 9px;
+  min-height: 50px;
+  padding: 8px 10px;
   cursor: pointer;
+  color: var(--text-primary);
+  background: var(--surface-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  transition: background 100ms ease, border-color 100ms ease;
+}
+
+.custom-color-choice:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
 }
 
 .custom-color-choice__input {
   position: relative;
   overflow: hidden;
+  width: 24px;
+  height: 24px;
 }
 
 .custom-color-choice__input input {
@@ -642,9 +477,19 @@ onMounted(() => {
   color: var(--text-muted);
 }
 
-.custom-color-choice > .color-choice__check {
-  top: 12px;
-  right: 9px;
+.identity-color__reset {
+  display: block;
+  margin: 9px 0 0;
+  padding: 0;
+  font: inherit;
+  font-size: 10px;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 0;
+}
+
+.identity-color__reset:hover {
+  color: var(--text-primary);
 }
 
 .identity-image__input {
@@ -823,13 +668,6 @@ onMounted(() => {
   font-size: 9px;
   color: var(--text-muted);
   text-align: center;
-}
-
-.identity-popover__footer {
-  padding: 10px 16px;
-  font-size: 9px;
-  color: var(--text-muted);
-  border-top: 1px solid var(--border-subtle);
 }
 
 @keyframes identity-popover-in {
