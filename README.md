@@ -70,7 +70,10 @@ cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 
 Every push to `main` runs [`.github/workflows/release.yml`](.github/workflows/release.yml). The
 workflow creates the next patch release, builds signed updater artifacts for Apple Silicon and Intel
-macOS, and publishes a GitHub Release containing the installers and `latest.json` metadata.
+macOS, and publishes a GitHub Release containing the installers and complete `latest.json` metadata.
+The architecture builds are serialized into a draft release, and the release is only published after
+the manifest has been checked for both macOS architectures. This keeps an in-progress release from
+being offered to the updater with only one platform available.
 
 The app uses Tauri's signed updater rather than downloading and replacing the app with a shell
 script. Open **Shipyard Settings → Updates** to check manually, enable or disable background checks,
