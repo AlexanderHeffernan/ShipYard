@@ -349,7 +349,9 @@ const deletionConfirmLabel = computed(() => {
   width: 100%;
   height: 100%;
   opacity: 1;
-  filter: blur(0);
+  /* Keep the normal surface out of its own stacking context so the work header
+     actions can sit above the native window drag region. */
+  filter: none;
   transition: opacity 420ms cubic-bezier(0.4, 0, 0.2, 1), filter 420ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
