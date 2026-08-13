@@ -1,11 +1,9 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
-import shipyardSunsetBase from '../../assets/shipyard-sunset-base.png';
-import shipyardSunsetForegroundFog from '../../assets/shipyard-sunset-foreground-fog.png';
-import shipyardSunsetRearFog from '../../assets/shipyard-sunset-rear-fog.png';
-import shipyardSunsetShip from '../../assets/shipyard-sunset-ship.png';
-import shipyardSunsetWake from '../../assets/shipyard-sunset-wake.png';
 import type { ShippingCompletion } from '../../composables/useShippingCompletion';
+import { preloadSunsetEffect, sunsetEffectAssets } from '../../services/completionAnimation';
+
+const { base, foregroundFog, rearFog, ship, wake } = sunsetEffectAssets;
 
 const props = defineProps<{ completion: ShippingCompletion }>();
 const emit = defineEmits<{ close: [] }>();
@@ -17,6 +15,7 @@ const reducedMotion = ref(false);
 let closeTimer: number | undefined;
 let exitTimer: number | undefined;
 let mediaQuery: MediaQueryList | undefined;
+const assetsReady = preloadSunsetEffect();
 
 function updateReducedMotion(event: MediaQueryListEvent) {
   reducedMotion.value = event.matches;
@@ -42,6 +41,7 @@ onMounted(async () => {
   window.addEventListener('keydown', onKeydown);
 
   await nextTick();
+  await assetsReady;
   const images = Array.from(root.value?.querySelectorAll('img') ?? []);
   await Promise.allSettled(images.map((image) => image.decode?.() ?? Promise.resolve()));
   if (!root.value) return;
@@ -69,14 +69,14 @@ onBeforeUnmount(() => {
     aria-label="Shipping complete"
   >
     <div class="shipyard-sunset__canvas" aria-hidden="true">
-      <img class="shipyard-sunset__base" :src="shipyardSunsetBase" alt="" draggable="false" />
-      <img class="shipyard-sunset__rear-fog" :src="shipyardSunsetRearFog" alt="" draggable="false" />
-      <img class="shipyard-sunset__static-fog" :src="shipyardSunsetForegroundFog" alt="" draggable="false" />
+      <img class="shipyard-sunset__base" :src="base" alt="" draggable="false" />
+      <img class="shipyard-sunset__rear-fog" :src="rearFog" alt="" draggable="false" />
+      <img class="shipyard-sunset__static-fog" :src="foregroundFog" alt="" draggable="false" />
       <div class="shipyard-sunset__voyage">
-        <img class="shipyard-sunset__wake" :src="shipyardSunsetWake" alt="" draggable="false" />
-        <img class="shipyard-sunset__ship" :src="shipyardSunsetShip" alt="" draggable="false" />
+        <img class="shipyard-sunset__wake" :src="wake" alt="" draggable="false" />
+        <img class="shipyard-sunset__ship" :src="ship" alt="" draggable="false" />
       </div>
-      <img class="shipyard-sunset__foreground-fog" :src="shipyardSunsetForegroundFog" alt="" draggable="false" />
+      <img class="shipyard-sunset__foreground-fog" :src="foregroundFog" alt="" draggable="false" />
     </div>
 
     <p class="sr-only" role="status" aria-live="assertive">

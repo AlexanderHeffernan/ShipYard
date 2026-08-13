@@ -3,6 +3,7 @@ import { Sparkles } from '@lucide/vue';
 import { ref } from 'vue';
 import {
   getSunsetEffectEnabled,
+  preloadSunsetEffect,
   setSunsetEffectEnabled,
 } from '../../services/completionAnimation';
 
@@ -10,6 +11,7 @@ const sunsetEffect = ref(getSunsetEffectEnabled());
 
 function updateSunsetEffect(event: Event) {
   sunsetEffect.value = setSunsetEffectEnabled((event.target as HTMLInputElement).checked);
+  if (sunsetEffect.value) void preloadSunsetEffect();
 }
 </script>
 
