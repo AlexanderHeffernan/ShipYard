@@ -5,7 +5,6 @@ import AppButton from '../ui/AppButton.vue';
 import ProjectIcon from '../ui/ProjectIcon.vue';
 import ProjectIdentityPopover from './ProjectIdentityPopover.vue';
 import type { Project, ProjectCustomization } from '../../types/projects';
-import { projectDefaultColor } from '../../utils/projectIdentity';
 
 const props = defineProps<{
   projects: Project[];
@@ -147,7 +146,6 @@ onBeforeUnmount(() => {
             <ProjectIdentityPopover
               v-if="identityProjectId === project.id"
               :project="project"
-              :default-color="projectDefaultColor(project.id)"
               @color="updateIdentity(project.id, { color: $event })"
               @image="updateIdentity(project.id, { image: $event })"
             />

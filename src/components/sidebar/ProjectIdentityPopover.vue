@@ -24,7 +24,6 @@ const IMAGE_TYPE_BY_EXTENSION: Record<string, string> = {
 
 const props = defineProps<{
   project: Project;
-  defaultColor: string;
 }>();
 
 const emit = defineEmits<{
@@ -84,11 +83,6 @@ function moveTab(event: KeyboardEvent) {
   event.preventDefault();
   activeTab.value = tabs[next];
   focusTab(tabs[next]);
-}
-
-function chooseColor(color: string | null) {
-  customColor.value = color ?? props.defaultColor;
-  emit('color', color);
 }
 
 function chooseCustomColor(event: Event) {
@@ -226,17 +220,12 @@ function removeImage() {
 
     <div
       v-if="activeTab === 'color'"
-      class="identity-tab-panel identity-tab-panel--color"
+      class="identity-tab-panel"
       role="tabpanel"
       :id="`${popoverId}-color-panel`"
       :aria-labelledby="`${popoverId}-color-tab`"
     >
-      <div class="identity-color__intro">
-        <div>
-          <strong>Choose a color</strong>
-          <span>{{ project.colorOverride ? 'Custom project color' : 'Generated default' }}</span>
-        </div>
-      </div>
+      <strong class="identity-color__label">Choose a color</strong>
 
       <label class="custom-color-choice">
         <span class="custom-color-choice__input" :style="{ background: customColor }">
@@ -252,20 +241,11 @@ function removeImage() {
           <small>{{ customColor.toUpperCase() }}</small>
         </span>
       </label>
-
-      <button
-        v-if="project.colorOverride"
-        class="identity-color__reset"
-        type="button"
-        @click="chooseColor(null)"
-      >
-        Use generated default · {{ defaultColor.toUpperCase() }}
-      </button>
     </div>
 
     <div
       v-else
-      class="identity-tab-panel identity-tab-panel--image"
+      class="identity-tab-panel"
       role="tabpanel"
       :id="`${popoverId}-image-panel`"
       :aria-labelledby="`${popoverId}-image-tab`"
@@ -382,38 +362,18 @@ function removeImage() {
 }
 
 .identity-tab-panel {
-  padding: 15px 16px 14px;
+  min-height: 148px;
+  padding: 10px 16px 8px;
 }
 
-.identity-tab-panel--color {
-  min-height: 168px;
-}
-
-.identity-tab-panel--image {
-  min-height: 244px;
-}
-
-.identity-color__intro {
-  display: flex;
-  align-items: flex-start;
-  margin-bottom: 12px;
-}
-
-.identity-color__intro strong,
+.identity-color__label,
 .custom-color-choice__copy strong {
   display: block;
   font-size: 12px;
   font-weight: 550;
 }
 
-.identity-color__intro span {
-  display: block;
-  margin-top: 4px;
-  font-size: 10px;
-  color: var(--text-secondary);
-}
 .custom-color-choice:focus-within,
-.identity-color__reset:focus-visible,
 .identity-image__actions button:focus-visible,
 .identity-image__empty button:focus-visible,
 .identity-image__remove-failed:focus-visible,
@@ -435,6 +395,7 @@ function removeImage() {
   align-items: center;
   gap: 9px;
   width: 100%;
+  margin-top: 8px;
   min-height: 50px;
   padding: 8px 10px;
   cursor: pointer;
@@ -477,31 +438,16 @@ function removeImage() {
   color: var(--text-muted);
 }
 
-.identity-color__reset {
-  display: block;
-  margin: 9px 0 0;
-  padding: 0;
-  font: inherit;
-  font-size: 10px;
-  color: var(--text-secondary);
-  background: transparent;
-  border: 0;
-}
-
-.identity-color__reset:hover {
-  color: var(--text-primary);
-}
-
 .identity-image__input {
   display: none;
 }
 
 .identity-image__preview-card {
   display: grid;
-  grid-template-columns: 58px minmax(0, 1fr);
-  gap: 11px;
+  grid-template-columns: 50px minmax(0, 1fr);
+  gap: 8px;
   align-items: center;
-  padding: 10px;
+  padding: 8px;
   background: rgba(255, 255, 255, 0.035);
   border: 1px solid var(--border-subtle);
   border-radius: 9px;
@@ -509,8 +455,8 @@ function removeImage() {
 
 .identity-image__preview {
   display: grid;
-  width: 58px;
-  height: 58px;
+  width: 50px;
+  height: 50px;
   overflow: hidden;
   place-items: center;
   border-radius: 9px;
@@ -549,7 +495,6 @@ function removeImage() {
   display: flex;
   grid-column: 1 / -1;
   gap: 6px;
-  padding-top: 2px;
 }
 
 .identity-image__actions button,
@@ -558,7 +503,7 @@ function removeImage() {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  height: 28px;
+  height: 26px;
   padding: 0 9px;
   font: inherit;
   font-size: 10px;
@@ -589,11 +534,11 @@ function removeImage() {
 
 .identity-image__empty {
   display: flex;
-  min-height: 203px;
+  min-height: 110px;
   align-items: center;
   justify-content: center;
   flex-direction: column;
-  padding: 18px 14px;
+  padding: 6px 10px;
   text-align: center;
   background: rgba(255, 255, 255, 0.025);
   border: 1px dashed rgba(255, 240, 248, 0.17);
@@ -602,9 +547,9 @@ function removeImage() {
 
 .identity-image__empty-icon {
   display: grid;
-  width: 42px;
-  height: 42px;
-  margin-bottom: 10px;
+  width: 32px;
+  height: 32px;
+  margin-bottom: 4px;
   place-items: center;
   color: var(--primary-hover);
   background: var(--primary-subtle);
@@ -613,8 +558,8 @@ function removeImage() {
 }
 
 .identity-image__empty-icon svg {
-  width: 21px;
-  height: 21px;
+  width: 17px;
+  height: 17px;
   stroke-width: 1.4;
 }
 
@@ -625,9 +570,9 @@ function removeImage() {
 
 .identity-image__empty > span:not(.identity-image__empty-icon) {
   max-width: 220px;
-  margin: 5px 0 13px;
-  font-size: 10px;
-  line-height: 1.4;
+  margin: 3px 0 6px;
+  font-size: 9px;
+  line-height: 1.25;
   color: var(--text-secondary);
 }
 
@@ -664,7 +609,7 @@ function removeImage() {
 }
 
 .identity-image__hint {
-  margin: 10px 0 0;
+  margin: 6px 0 0;
   font-size: 9px;
   color: var(--text-muted);
   text-align: center;
